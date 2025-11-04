@@ -1,0 +1,47 @@
+[package]
+name = "psycial"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+csv = "1.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rand = "0.8"
+regex = "1.10"
+ndarray = "0.16"
+
+# Deep learning dependencies  
+rust-bert = { version = "0.22", optional = true, features = ["download-libtorch"] }
+
+[features]
+default = []
+bert = ["rust-bert"]
+
+[[bin]]
+name = "baseline"
+path = "src/main.rs"
+
+[[bin]]
+name = "psyattention"
+path = "src/psyattention/main.rs"
+
+[[bin]]
+name = "psyattention-full"
+path = "src/psyattention_full.rs"
+
+[[bin]]
+name = "psyattention-bert"
+path = "src/psyattention_candle.rs"
+
+[[bin]]
+name = "bert-only"
+path = "src/bert_only.rs"
+
+[[bin]]
+name = "bert-mlp"
+path = "src/bert_mlp.rs"
+
+[[bin]]
+name = "psycial"
+path = "src/hybrid_tfidf_bert.rs"
