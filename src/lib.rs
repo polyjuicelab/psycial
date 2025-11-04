@@ -24,6 +24,7 @@
 pub mod baseline;
 pub mod neural_net;
 pub mod neural_net_advanced;
+pub mod neural_net_gpu;
 pub mod psyattention;
 
 // Optional BERT modules

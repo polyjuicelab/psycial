@@ -1,5 +1,6 @@
-use crate::neural_net_advanced;
-use crate::psyattention;
+use crate::neural_net_gpu::GpuMLP;
+use crate::psyattention::bert_rustbert::RustBertEncoder;
+
 use csv::ReaderBuilder;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
@@ -8,9 +9,6 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::time::Instant;
-
-use neural_net_advanced::AdvancedMLP;
-use psyattention::bert_rustbert::RustBertEncoder;
 
 #[derive(Debug, Deserialize, Clone)]
 struct MbtiRecord {
@@ -114,14 +112,12 @@ impl TfidfVectorizer {
         tfidf
     }
 
-    #[allow(dead_code)]
     fn save(&self, path: &str) -> std::io::Result<()> {
         let json = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
         std::fs::write(path, json)?;
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn load(path: &str) -> std::io::Result<Self> {
         let json = std::fs::read_to_string(path)?;
         let vectorizer = serde_json::from_str(&json)
@@ -130,97 +126,41 @@ impl TfidfVectorizer {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct HybridModel {
-    tfidf: TfidfVectorizer,
-    mlp: AdvancedMLP,
-}
-
-impl HybridModel {
-    fn save(&self, path: &str) -> Result<(), Box<dyn Error>> {
-        std::fs::create_dir_all("models")?;
-        let json = serde_json::to_string_pretty(self)?;
-        std::fs::write(path, json)?;
-        println!("\n✓ Model saved to {}", path);
-        println!("  TF-IDF vocabulary: {} words", self.tfidf.vocabulary.len());
-        println!("  MLP architecture: {} layers", self.mlp.num_layers());
-        Ok(())
-    }
-
-    fn load(path: &str) -> Result<Self, Box<dyn Error>> {
-        let json = std::fs::read_to_string(path)?;
-        let model = serde_json::from_str(&json)?;
-        println!("\n✓ Model loaded from {}", path);
-        Ok(model)
-    }
-}
+// Note: GPU model saving disabled - GpuMLP contains non-serializable GPU tensors
+// Future: implement custom save/load using tch::nn::VarStore
 
 fn print_usage() {
     println!("Usage:");
-    println!("  cargo run --release --features bert --bin psycial -- [COMMAND] [OPTIONS]\n");
+    println!("  cargo run --release --features bert --bin psycial -- hybrid [COMMAND]\n");
     println!("Commands:");
-    println!("  train                    Train new model and save to models/");
-    println!("  train --model PATH       Train and save to custom path");
-    println!("  evaluate --model PATH    Evaluate existing model");
-    println!("  predict --model PATH --text \"...\"  Predict single text");
-    println!("  help                     Show this help\n");
+    println!("  train              Train new GPU model (saves to models/)");
+    println!("  predict TEXT       Predict single text (requires trained model)");
+    println!("  help               Show this help\n");
     println!("Examples:");
-    println!("  cargo run --release --features bert --bin psycial -- train");
-    println!("  cargo run --release --features bert --bin psycial -- evaluate --model models/psycial_model.json");
-    println!("  cargo run --release --features bert --bin psycial -- predict --model models/psycial_model.json --text \"I love coding\"");
+    println!("  ./target/release/psycial hybrid train");
+    println!("  ./target/release/psycial hybrid predict \"I love solving problems\"");
 }
 
 pub fn main_hybrid(args: Vec<String>) -> Result<(), Box<dyn Error>> {
-    // Parse command
-    let command = if args.len() > 1 { &args[1] } else { "train" };
+    let command = if args.len() > 1 {
+        args[1].as_str()
+    } else {
+        "train"
+    };
 
     match command {
+        "train" => train_model(),
+        "predict" => {
+            if args.len() < 3 {
+                println!("Error: TEXT argument required\n");
+                print_usage();
+                return Ok(());
+            }
+            predict_single(&args[2])
+        }
         "help" | "--help" | "-h" => {
             print_usage();
             Ok(())
-        }
-        "train" => {
-            let model_path = if args.len() > 3 && args[2] == "--model" {
-                args[3].clone()
-            } else {
-                "models/psycial_model.json".to_string()
-            };
-            train_model(&model_path)
-        }
-        "evaluate" => {
-            let model_path = if args.len() > 3 && args[2] == "--model" {
-                args[3].clone()
-            } else {
-                println!("Error: --model PATH required for evaluate command");
-                print_usage();
-                return Ok(());
-            };
-            evaluate_model(&model_path)
-        }
-        "predict" => {
-            let mut model_path = String::new();
-            let mut text = String::new();
-
-            let mut i = 2;
-            while i < args.len() {
-                if args[i] == "--model" && i + 1 < args.len() {
-                    model_path = args[i + 1].clone();
-                    i += 2;
-                } else if args[i] == "--text" && i + 1 < args.len() {
-                    text = args[i + 1].clone();
-                    i += 2;
-                } else {
-                    i += 1;
-                }
-            }
-
-            if model_path.is_empty() || text.is_empty() {
-                println!("Error: --model PATH and --text \"...\" required");
-                print_usage();
-                return Ok(());
-            }
-
-            predict_text(&model_path, &text)
         }
         _ => {
             println!("Unknown command: {}\n", command);
@@ -230,15 +170,14 @@ pub fn main_hybrid(args: Vec<String>) -> Result<(), Box<dyn Error>> {
     }
 }
 
-fn train_model(model_path: &str) -> Result<(), Box<dyn Error>> {
+fn train_model() -> Result<(), Box<dyn Error>> {
     println!("\n===================================================================");
-    println!("  MBTI Classifier: TF-IDF + BERT Hybrid with Advanced MLP");
-    println!("  Training Mode");
+    println!("  MBTI Classifier: GPU-Accelerated Hybrid Model");
+    println!("  TF-IDF + BERT + GPU MLP");
     println!("===================================================================\n");
 
     println!("Strategy: Combine statistical (TF-IDF) and semantic (BERT) features");
-    println!("Classifier: Advanced MLP with Adam optimizer and Dropout");
-    println!("Model will be saved to: {}\n", model_path);
+    println!("Classifier: GPU-Accelerated MLP with Adam optimizer and Dropout\n");
     println!("===================================================================\n");
 
     // Load data
@@ -284,23 +223,52 @@ fn train_model(model_path: &str) -> Result<(), Box<dyn Error>> {
     println!("Extracting hybrid features (TF-IDF + BERT)...");
 
     let train_start = Instant::now();
-    let mut train_features = Vec::new();
 
-    for (i, text) in train_texts.iter().enumerate() {
-        if (i + 1) % 1000 == 0 {
-            println!("  Train: {}/{}", i + 1, train_texts.len());
+    // Extract TF-IDF features first
+    println!("  Extracting TF-IDF features...");
+    let tfidf_features: Vec<Vec<f64>> = train_texts
+        .iter()
+        .enumerate()
+        .map(|(i, text)| {
+            if (i + 1) % 1000 == 0 {
+                println!("    TF-IDF: {}/{}", i + 1, train_texts.len());
+            }
+            tfidf.transform(text)
+        })
+        .collect();
+
+    // Batch extract BERT features (GPU optimized!)
+    println!("  Extracting BERT features (GPU batch mode)...");
+    let batch_size = 64; // Process 64 texts at once on GPU
+    let mut all_bert_features = Vec::new();
+
+    for (batch_idx, chunk) in train_texts.chunks(batch_size).enumerate() {
+        let chunk_vec: Vec<String> = chunk.to_vec();
+        let bert_batch = bert_encoder.extract_features_batch(&chunk_vec)?;
+        all_bert_features.extend(bert_batch);
+
+        if (batch_idx + 1) % 10 == 0 {
+            println!(
+                "    BERT batch: {}/{}",
+                (batch_idx + 1) * batch_size,
+                train_texts.len()
+            );
         }
+    }
 
-        let tfidf_feat = tfidf.transform(text);
-        let bert_feat = bert_encoder.extract_features(text)?;
-
-        // Concatenate: 5000 (TF-IDF) + 384 (BERT) = 5384 features
+    // Combine TF-IDF + BERT features
+    println!("  Combining features...");
+    let mut train_features = Vec::new();
+    for (tfidf_feat, bert_feat) in tfidf_features
+        .into_iter()
+        .zip(all_bert_features.into_iter())
+    {
         let mut combined = tfidf_feat;
         combined.extend(bert_feat);
         train_features.push(combined);
     }
 
-    println!("\nTraining Advanced MLP...");
+    println!("\nTraining GPU-Accelerated MLP...");
     println!("  Input: 5384 features (5000 TF-IDF + 384 BERT)");
     println!("  Architecture: 5384 -> 1024 -> 512 -> 256 -> 16");
     println!("  Optimizer: Adam");
@@ -308,7 +276,7 @@ fn train_model(model_path: &str) -> Result<(), Box<dyn Error>> {
     println!("  Dropout: 0.4");
     println!("  Epochs: 40\n");
 
-    let mut mlp = AdvancedMLP::new(
+    let mut mlp = GpuMLP::new(
         5384,                 // 5K TF-IDF + BERT
         vec![1024, 512, 256], // Deeper network
         16,                   // MBTI types
@@ -401,116 +369,68 @@ fn train_model(model_path: &str) -> Result<(), Box<dyn Error>> {
     println!("\n===================================================================\n");
 
     // Save model
-    let model = HybridModel { tfidf, mlp };
-    model.save(model_path)?;
+    std::fs::create_dir_all("models")?;
+
+    println!("Saving model...");
+    tfidf.save("models/tfidf_vectorizer.json")?;
+    mlp.save("models/mlp_weights.pt")?;
+    mlp.save_class_mapping("models/class_mapping.json")?;
+
+    println!("\n✓ Model saved:");
+    println!("  - models/tfidf_vectorizer.json");
+    println!("  - models/mlp_weights.pt");
+    println!("  - models/class_mapping.json");
 
     println!("\n===================================================================\n");
-    println!("Training complete! Model ready for use.\n");
-    println!(
-        "To evaluate: cargo run --release --features bert --bin psycial -- evaluate --model {}",
-        model_path
-    );
-    println!("To predict:  cargo run --release --features bert --bin psycial -- predict --model {} --text \"your text\"\n", model_path);
+    println!("Training complete!\n");
+    println!("To predict: ./target/release/psycial hybrid predict \"your text here\"\n");
 
     Ok(())
 }
 
-fn evaluate_model(model_path: &str) -> Result<(), Box<dyn Error>> {
+fn predict_single(text: &str) -> Result<(), Box<dyn Error>> {
     println!("\n===================================================================");
-    println!("  MBTI Classifier: Model Evaluation");
+    println!("  MBTI Classifier: GPU Prediction");
     println!("===================================================================\n");
 
-    println!("Loading model from: {}\n", model_path);
-    let model = HybridModel::load(model_path)?;
+    println!("Loading model...");
 
-    println!("Initializing BERT encoder...");
-    let bert_encoder = RustBertEncoder::new()?;
+    // Load TF-IDF vectorizer
+    let tfidf = TfidfVectorizer::load("models/tfidf_vectorizer.json")?;
+    println!("  ✓ TF-IDF loaded");
 
-    // Load test data
-    println!("\nLoading test dataset...");
-    let file = File::open("data/mbti_1.csv")?;
-    let mut rdr = ReaderBuilder::new().has_headers(true).from_reader(file);
-    let mut records: Vec<MbtiRecord> = rdr.deserialize().collect::<Result<_, _>>()?;
+    // Load MLP
+    let mut mlp = GpuMLP::load("models/mlp_weights.pt", 5384, vec![1024, 512, 256], 16, 0.4)?;
+    mlp.load_class_mapping("models/class_mapping.json")?;
+    println!("  ✓ MLP loaded\n");
 
-    // Use same split as training (20% test)
-    let mut rng = thread_rng();
-    records.shuffle(&mut rng);
-    let split = (records.len() as f64 * 0.8) as usize;
-    let test_records = &records[split..];
-
-    println!("  Test samples: {}\n", test_records.len());
-    println!("===================================================================\n");
-
-    // Extract features and evaluate
-    println!("Evaluating...");
-    let start = Instant::now();
-    let mut correct = 0;
-
-    for (i, record) in test_records.iter().enumerate() {
-        if (i + 1) % 500 == 0 {
-            println!("  Processed: {}/{}", i + 1, test_records.len());
-        }
-
-        let tfidf_feat = model.tfidf.transform(&record.posts);
-        let bert_feat = bert_encoder.extract_features(&record.posts)?;
-
-        let mut combined = tfidf_feat;
-        combined.extend(bert_feat);
-
-        let pred = model.mlp.predict(&combined);
-        if pred == record.mbti_type {
-            correct += 1;
-        }
-    }
-
-    let accuracy = correct as f64 / test_records.len() as f64;
-
-    println!("\n===================================================================\n");
-    println!("Evaluation Results\n");
-    println!("  Accuracy: {:.2}%", accuracy * 100.0);
-    println!("  Correct: {}/{}", correct, test_records.len());
-    println!("  Time: {:.2}s\n", start.elapsed().as_secs_f64());
-    println!("===================================================================\n");
-
-    Ok(())
-}
-
-fn predict_text(model_path: &str, text: &str) -> Result<(), Box<dyn Error>> {
-    println!("\n===================================================================");
-    println!("  MBTI Classifier: Single Prediction");
-    println!("===================================================================\n");
-
-    println!("Loading model from: {}\n", model_path);
-    let model = HybridModel::load(model_path)?;
-
-    println!("Initializing BERT encoder...");
+    // Initialize BERT
+    println!("Initializing BERT...");
     let bert_encoder = RustBertEncoder::new()?;
 
     println!("\nInput text:");
-    let display_text = if text.len() > 100 {
-        format!("{}...", &text[..100])
+    let display = if text.len() > 100 {
+        &format!("{}...", &text[..100])
     } else {
-        text.to_string()
+        text
     };
-    println!("  {}\n", display_text);
+    println!("  {}\n", display);
 
     println!("Processing...");
     let start = Instant::now();
 
     // Extract features
-    let tfidf_feat = model.tfidf.transform(text);
+    let tfidf_feat = tfidf.transform(text);
     let bert_feat = bert_encoder.extract_features(text)?;
-
     let mut combined = tfidf_feat;
     combined.extend(bert_feat);
 
     // Predict
-    let prediction = model.mlp.predict(&combined);
+    let prediction = mlp.predict(&combined);
 
-    println!("\n===================================================================\n");
-    println!("Prediction Result\n");
+    println!("\n===================================================================");
     println!("  MBTI Type: {}", prediction);
-    println!("  Time: {:.3}s\n", start.elapsed().as_secs_f64());
+    println!("  Time: {:.3}s", start.elapsed().as_secs_f64());
     println!("===================================================================\n");
 
     Ok(())

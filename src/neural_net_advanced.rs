@@ -30,10 +30,12 @@ pub struct AdvancedMLP {
 }
 
 impl AdvancedMLP {
+    #[allow(dead_code)]
     pub fn num_layers(&self) -> usize {
         self.weights.len()
     }
 
+    #[allow(dead_code)]
     pub fn new(
         input_dim: usize,
         hidden_dims: Vec<usize>,
@@ -99,6 +101,7 @@ impl AdvancedMLP {
         }
     }
 
+    #[allow(dead_code)]
     pub fn train(
         &mut self,
         features: &[Vec<f64>],
@@ -184,6 +187,7 @@ impl AdvancedMLP {
         println!("\nTraining complete!");
     }
 
+    #[allow(dead_code)]
     fn forward_train(&self, input: &[f64]) -> (Vec<Vec<f64>>, Vec<Vec<f64>>) {
         let mut rng = rand::thread_rng();
         let mut activations = vec![input.to_vec()];
@@ -236,6 +240,7 @@ impl AdvancedMLP {
         (activations, pre_activations)
     }
 
+    #[allow(dead_code)]
     fn forward_test(&self, input: &[f64]) -> Vec<Vec<f64>> {
         let mut activations = vec![input.to_vec()];
 
@@ -273,6 +278,7 @@ impl AdvancedMLP {
         activations
     }
 
+    #[allow(dead_code)]
     fn backward_adam(&mut self, input: &[f64], target: &[f64]) {
         let (activations, pre_activations) = self.forward_train(input);
 
@@ -346,6 +352,7 @@ impl AdvancedMLP {
         }
     }
 
+    #[allow(dead_code)]
     pub fn predict(&self, features: &[f64]) -> String {
         let activations = self.forward_test(features);
         let output = activations.last().unwrap();
@@ -363,6 +370,7 @@ impl AdvancedMLP {
             .unwrap_or_else(|| "UNKNOWN".to_string())
     }
 
+    #[allow(dead_code)]
     fn softmax(&self, x: &[f64]) -> Vec<f64> {
         let max = x.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
         let exp: Vec<f64> = x.iter().map(|&v| (v - max).exp()).collect();

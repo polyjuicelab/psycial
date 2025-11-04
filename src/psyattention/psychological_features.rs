@@ -15,7 +15,6 @@ use std::collections::HashMap;
 // 7. Guilt_GALC (0.66) - Guilt emotion
 // 8. Humility_GALC (0.63) - Humility emotion
 // 9. Powdoct_Lasswell (0.63) - Power doctrine words
-
 /// Emotion category: Well-being gain words (37 words from Lasswell dictionary)
 const WELLBEING_WORDS: &[&str] = &[
     "affection",

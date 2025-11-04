@@ -22,24 +22,27 @@ impl RustBertEncoder {
         println!("🦀 Loading Real BERT (rust-bert library)...");
         println!("   Model: all-MiniLM-L6-v2 (sentence-transformers)");
         println!("   Backend: libtorch (PyTorch C++)");
-        
+
         // Detailed CUDA diagnostics
         println!("\n🔍 CUDA Diagnostics:");
         println!("   CUDA available: {}", tch::Cuda::is_available());
         println!("   CUDA device count: {}", tch::Cuda::device_count());
         println!("   cuDNN available: {}", tch::Cuda::cudnn_is_available());
-        
+
         // Force GPU usage
         let device = if tch::Cuda::device_count() > 0 {
             // CUDA_VISIBLE_DEVICES=1 makes GPU 1 appear as device 0
             let device_id = 0;
-            println!("   Using GPU device: {} (mapped from CUDA_VISIBLE_DEVICES)", device_id);
+            println!(
+                "   Using GPU device: {} (mapped from CUDA_VISIBLE_DEVICES)",
+                device_id
+            );
             Device::Cuda(device_id)
         } else {
             println!("   ⚠️  No CUDA devices found, falling back to CPU");
             Device::Cpu
         };
-        
+
         println!("   Final device: {:?}\n", device);
 
         // Use MiniLM with explicit device
@@ -69,8 +72,7 @@ impl RustBertEncoder {
         }
     }
 
-    /// Batch extract features for multiple texts (more efficient)
-    #[allow(dead_code)]
+    /// Batch extract features for multiple texts (GPU optimized!)
     pub fn extract_features_batch(
         &self,
         texts: &[String],
