@@ -18,16 +18,22 @@ max_tfidf_features = 5000
 model_type = "multitask"
 
 # Network architecture (hidden layer sizes)
-hidden_layers = [1024, 512, 256]
+# Paper uses 8-layer Transformer with 108 features -> we use simpler but effective architecture
+hidden_layers = [768, 512, 256]
 # Learning rate for Adam optimizer
 learning_rate = 0.001
 # Dropout rate for regularization (0.0-1.0)
 # Higher values = stronger regularization, less overfitting
-dropout_rate = 0.5
+# Paper: implicit in Transformer; we use 0.6 as balanced value
+dropout_rate = 0.6
+# Weight decay (L2 regularization) for Adam optimizer (0.0-0.1)
+# Typical values: 0.0001-0.01. Higher values = stronger regularization
+weight_decay = 0.01
 
 [training]
 # Number of training epochs
-epochs = 25
+# Paper uses 50+50 (two-stage); we use 20 for single-stage
+epochs = 20
 # Batch size for training
 batch_size = 64
 # BERT batch processing size

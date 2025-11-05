@@ -253,6 +253,7 @@ fn train_multitask_model(params: TrainingParams) -> Result<(), Box<dyn Error>> {
         params.config.model.hidden_layers.clone(),
         params.config.model.learning_rate,
         params.config.model.dropout_rate,
+        params.config.model.weight_decay,
     );
 
     mlp.train(

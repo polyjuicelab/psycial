@@ -20,6 +20,7 @@ pub struct MultiTaskGpuMLP {
     head_jp: nn::Linear, // Judging/Perceiving
 
     learning_rate: f64,
+    weight_decay: f64,
 }
 
 #[cfg(feature = "bert")]
@@ -29,6 +30,7 @@ impl MultiTaskGpuMLP {
         shared_layers: Vec<i64>,
         learning_rate: f64,
         dropout_rate: f64,
+        weight_decay: f64,
     ) -> Self {
         // Auto-detect GPU
         let device = if tch::Cuda::is_available() {
@@ -75,6 +77,7 @@ impl MultiTaskGpuMLP {
             head_tf,
             head_jp,
             learning_rate,
+            weight_decay,
         }
     }
 
@@ -111,10 +114,13 @@ impl MultiTaskGpuMLP {
         let y_tf = Tensor::from_slice(&labels_tf).to(self.device);
         let y_jp = Tensor::from_slice(&labels_jp).to(self.device);
 
-        // Optimizer
-        let mut opt = nn::Adam::default()
-            .build(&self.vs, self.learning_rate)
-            .unwrap();
+        // Optimizer with weight decay (L2 regularization)
+        let mut opt = nn::Adam {
+            wd: self.weight_decay,
+            ..Default::default()
+        }
+        .build(&self.vs, self.learning_rate)
+        .unwrap();
 
         // Training loop
         for epoch in 0..epochs {
@@ -327,6 +333,7 @@ impl MultiTaskGpuMLP {
             head_tf,
             head_jp,
             learning_rate: 0.001,
+            weight_decay: 0.0, // Default for loaded models
         })
     }
 }

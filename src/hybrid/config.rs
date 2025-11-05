@@ -49,6 +49,8 @@ pub struct ModelConfig {
     pub learning_rate: f64,
     /// Dropout rate for regularization
     pub dropout_rate: f64,
+    /// Weight decay (L2 regularization) for Adam optimizer
+    pub weight_decay: f64,
 }
 
 /// Training hyperparameters.
@@ -110,6 +112,7 @@ impl Default for Config {
                 hidden_layers: vec![1024, 512, 256],
                 learning_rate: 0.001,
                 dropout_rate: 0.5,
+                weight_decay: 0.0,
             },
             training: TrainingConfig {
                 epochs: 25,
