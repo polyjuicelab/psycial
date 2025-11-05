@@ -33,7 +33,8 @@ impl GpuMLP {
 
         println!("🎮 MLP Device: {:?}", device);
 
-        let vs = nn::VarStore::new(device);
+        let mut vs = nn::VarStore::new(device);
+        vs.set_kind(tch::Kind::Float); // Use f32 to match input data type
         let root = vs.root();
 
         // Build network
@@ -222,6 +223,7 @@ impl GpuMLP {
         };
 
         let mut vs = nn::VarStore::new(device);
+        vs.set_kind(tch::Kind::Float); // Use f32 to match input data type
         let root = vs.root();
 
         // Rebuild network structure

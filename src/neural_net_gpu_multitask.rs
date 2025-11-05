@@ -39,7 +39,8 @@ impl MultiTaskGpuMLP {
 
         println!("🎮 Multi-Task MLP Device: {:?}", device);
 
-        let vs = nn::VarStore::new(device);
+        let mut vs = nn::VarStore::new(device);
+        vs.set_kind(tch::Kind::Float); // Use f32 to match input data type
         let root = vs.root();
 
         // Build shared network layers
@@ -207,7 +208,8 @@ impl MultiTaskGpuMLP {
 
     /// Predict MBTI type from features
     pub fn predict(&self, features: &[f64]) -> String {
-        let input_tensor = Tensor::from_slice(features)
+        let features_f32: Vec<f32> = features.iter().map(|&x| x as f32).collect();
+        let input_tensor = Tensor::from_slice(&features_f32)
             .to_device(self.device)
             .unsqueeze(0);
 
@@ -288,6 +290,7 @@ impl MultiTaskGpuMLP {
         };
 
         let mut vs = nn::VarStore::new(device);
+        vs.set_kind(tch::Kind::Float); // Use f32 to match input data type
         let root = vs.root();
 
         // Rebuild network structure
