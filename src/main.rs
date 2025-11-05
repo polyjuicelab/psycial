@@ -6,7 +6,7 @@ use std::process;
 mod baseline;
 mod bert_mlp;
 mod bert_only;
-mod hybrid_tfidf_bert;
+mod hybrid;
 mod neural_net;
 mod neural_net_advanced;
 mod neural_net_gpu;
@@ -84,7 +84,7 @@ fn main() {
         "psyattention-bert" => psyattention_candle::main_psyattention_bert(sub_args),
         "bert-only" => bert_only::main_bert_only(sub_args),
         "bert-mlp" => bert_mlp::main_bert_mlp(sub_args),
-        "hybrid" => hybrid_tfidf_bert::main_hybrid(sub_args),
+        "hybrid" => hybrid::main_hybrid(sub_args),
         "help" | "--help" | "-h" => {
             print_help();
             process::exit(0);

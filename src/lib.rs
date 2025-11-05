@@ -34,7 +34,7 @@ pub mod bert_mlp;
 #[cfg(feature = "bert")]
 pub mod bert_only;
 #[cfg(feature = "bert")]
-pub mod hybrid_tfidf_bert;
+pub mod hybrid;
 #[cfg(feature = "bert")]
 pub mod psyattention_candle;
 #[cfg(feature = "bert")]
