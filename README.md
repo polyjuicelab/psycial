@@ -40,7 +40,34 @@
 
 ## Quick Start
 
-### Option 1: Use Pre-trained Model from Hugging Face
+### As a Library
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+# With auto-download from Hugging Face
+psycial = { version = "0.1", features = ["auto-download"] }
+```
+
+Use in your code:
+
+```rust
+use psycial::api::Predictor;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let predictor = Predictor::new()?;
+    let result = predictor.predict("I love solving complex problems")?;
+    println!("Type: {} (confidence: {:.1}%)", 
+             result.mbti_type, 
+             result.confidence * 100.0);
+    Ok(())
+}
+```
+
+See full API documentation: `cargo doc --open --features auto-download`
+
+### Option 1: Use Pre-trained Model from Hugging Face (CLI)
 
 Download the trained model and start predicting immediately:
 

@@ -1,13 +1,16 @@
 [package]
 name = "psycial"
-version = "0.2.0"
+version = "0.1.0"
 edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
-description = "MBTI personality prediction using psychological features and deep learning"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/psycial"
-keywords = ["mbti", "personality", "nlp", "machine-learning", "psychology"]
+authors = ["ElderRyan <elderryan@0xbase.ai>"]
+description = "Production-grade MBTI personality classifier with GPU-accelerated multi-task neural networks"
+license = "GPL-3.0"
+repository = "https://github.com/RyanKung/psycial"
+homepage = "https://psycial.0xbase.ai"
+documentation = "https://docs.rs/psycial"
+keywords = ["mbti", "personality", "nlp", "neural-networks", "classification"]
 categories = ["science", "text-processing"]
+readme = "README.md"
 
 [lib]
 name = "psycial"
@@ -24,13 +27,24 @@ ndarray = "0.16"
 console = { version = "0.16", features = ["std"] }
 
 # Deep learning dependencies  
-rust-bert = { version = "0.22", optional = true, features = ["download-libtorch"] }
-tch = { version = "0.14", optional = true }
+rust-bert = { version = "0.22", features = ["download-libtorch"] }
+tch = "0.14"
+
+# CLI dependencies
+clap = { version = "4.0", features = ["derive"], optional = true }
+
+# Auto-download dependencies
+hf-hub = { version = "0.3", optional = true }
+tokio = { version = "1.35", features = ["rt-multi-thread", "macros"], optional = true }
 
 [features]
-default = ["bert"]
-bert = ["rust-bert", "tch"]
+default = ["cli"]
+cli = ["clap"]
+auto-download = ["hf-hub", "tokio"]
+gpu = []
 
 [[bin]]
 name = "psycial"
 path = "src/main.rs"
+required-features = ["cli"]
+
