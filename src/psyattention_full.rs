@@ -220,8 +220,8 @@ pub fn main_psyattention_full(_args: Vec<String>) -> Result<(), Box<dyn Error>> 
         improvement_over_random
     );
     println!(
-        "   • Baseline comparison:",
-        (test_accuracy / 0.863) * 100.0
+        "   • {:.1}% improvement over baseline",
+        ((test_accuracy - 0.2173) / 0.2173) * 100.0
     );
 
     println!("   ✗ BERT fine-tuning and integration");

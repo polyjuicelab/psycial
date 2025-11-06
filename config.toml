@@ -96,7 +96,7 @@ class_mapping_file = "class_mapping.json"
 # - dropout_rate 0.4 with epochs 40: Overfitting (train 99%, test 49%)
 #
 # With psychological features:
-# - use_psychological_features = true, psy_feature_type = "selected"
+# - use_psychological_features = false, psy_feature_type = "selected"
 #   Expected: 5000 (TF-IDF) + 384 (BERT) + 108 (Psy) = 5492 features
 #   Target accuracy: 60-75% (vs 55-60% without psy features)
 #   Training time: +30s for feature extraction and selection

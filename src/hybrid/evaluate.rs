@@ -7,6 +7,8 @@ use super::tfidf::TfidfVectorizer;
 use crate::neural_net_gpu::GpuMLP;
 use crate::neural_net_gpu_multitask::MultiTaskGpuMLP;
 use crate::psyattention::bert_rustbert::RustBertEncoder;
+use crate::psyattention::full_features::{FullPsychologicalExtractor, PearsonFeatureSelector};
+use crate::psyattention::psychological_features::PsychologicalFeatureExtractor;
 use std::error::Error;
 use std::time::Instant;
 
@@ -17,6 +19,7 @@ pub struct EvaluationContext<'a> {
     pub test_records: &'a [MbtiRecord],
     pub tfidf: &'a TfidfVectorizer,
     pub bert_encoder: &'a RustBertEncoder,
+    pub psy_selector: &'a Option<PearsonFeatureSelector>,
     pub train_start: Instant,
     pub config: &'a Config,
 }
@@ -56,6 +59,47 @@ pub fn evaluate_multitask_model(
         .map(|r| r.mbti_type.clone())
         .collect();
 
+    // Extract psychological features if enabled (must match training)
+    let test_psy_features = if ctx.config.features.use_psychological_features {
+        match ctx.config.features.psy_feature_type.as_str() {
+            "simple" => {
+                let extractor = PsychologicalFeatureExtractor::new();
+                test_texts
+                    .iter()
+                    .map(|text| extractor.extract_features(text))
+                    .collect()
+            }
+            "selected" => {
+                let extractor = FullPsychologicalExtractor::new();
+                let all_features: Vec<Vec<f64>> = test_texts
+                    .iter()
+                    .map(|text| extractor.extract_all_features(text))
+                    .collect();
+                
+                // Apply saved selector
+                if let Some(selector) = ctx.psy_selector {
+                    all_features
+                        .into_iter()
+                        .map(|features| selector.transform(&features))
+                        .collect()
+                } else {
+                    eprintln!("Warning: Psychological features enabled but selector not found!");
+                    vec![vec![]; test_texts.len()]
+                }
+            }
+            "full" => {
+                let extractor = FullPsychologicalExtractor::new();
+                test_texts
+                    .iter()
+                    .map(|text| extractor.extract_all_features(text))
+                    .collect()
+            }
+            _ => vec![vec![]; test_texts.len()],
+        }
+    } else {
+        vec![vec![]; test_texts.len()]
+    };
+
     let mut test_features = Vec::new();
     for (i, text) in test_texts.iter().enumerate() {
         if (i + 1) % 500 == 0 {
@@ -63,8 +107,11 @@ pub fn evaluate_multitask_model(
         }
         let tfidf_feat = ctx.tfidf.transform(text);
         let bert_feat = ctx.bert_encoder.extract_features(text)?;
+        let psy_feat = &test_psy_features[i];
+        
         let mut combined = tfidf_feat;
         combined.extend(bert_feat);
+        combined.extend(psy_feat);
         test_features.push(combined);
     }
 

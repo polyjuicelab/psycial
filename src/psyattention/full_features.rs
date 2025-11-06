@@ -61,6 +61,7 @@ impl Default for FullPsychologicalExtractor {
 
 /// Pearson correlation-based feature selector
 /// Reduces 930 features to ~102-114 features (85% reduction)
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct PearsonFeatureSelector {
     threshold: f64,
     selected_indices: Vec<usize>,
@@ -165,6 +166,28 @@ impl PearsonFeatureSelector {
             .iter()
             .map(|&idx| features[idx])
             .collect()
+    }
+
+    /// Save feature selector to JSON file
+    pub fn save(&self, path: &str) -> std::io::Result<()> {
+        let json = serde_json::to_string_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        std::fs::write(path, json)?;
+        println!("  ✓ Feature selector saved to {}", path);
+        Ok(())
+    }
+
+    /// Load feature selector from JSON file
+    pub fn load(path: &str) -> std::io::Result<Self> {
+        let json = std::fs::read_to_string(path)?;
+        let selector = serde_json::from_str(&json)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(selector)
+    }
+
+    /// Get selected feature indices
+    pub fn get_selected_indices(&self) -> &[usize] {
+        &self.selected_indices
     }
 
     /// Compute Pearson correlation matrix

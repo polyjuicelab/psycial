@@ -18,8 +18,16 @@ use std::fs::File;
 use std::time::Instant;
 
 /// Type alias for feature extraction result to reduce complexity.
-type FeatureExtractionResult =
-    Result<(Vec<Vec<f64>>, Vec<String>, TfidfVectorizer, RustBertEncoder), Box<dyn Error>>;
+type FeatureExtractionResult = Result<
+    (
+        Vec<Vec<f64>>,
+        Vec<String>,
+        TfidfVectorizer,
+        RustBertEncoder,
+        Option<PearsonFeatureSelector>,
+    ),
+    Box<dyn Error>,
+>;
 
 /// Parameters for model training to reduce function argument count.
 struct TrainingParams<'a> {
@@ -30,6 +38,7 @@ struct TrainingParams<'a> {
     test_records: &'a [MbtiRecord],
     tfidf: &'a TfidfVectorizer,
     bert_encoder: &'a RustBertEncoder,
+    psy_selector: &'a Option<PearsonFeatureSelector>,
     train_start: Instant,
 }
 
@@ -91,7 +100,7 @@ pub fn train_model(model_type_override: Option<&str>) -> Result<(), Box<dyn Erro
     println!("===================================================================\n");
 
     // Extract features
-    let (train_features, train_labels, tfidf, bert_encoder) =
+    let (train_features, train_labels, tfidf, bert_encoder, psy_selector) =
         extract_features(train_records, &config)?;
 
     // Train model
@@ -152,6 +161,7 @@ pub fn train_model(model_type_override: Option<&str>) -> Result<(), Box<dyn Erro
         test_records,
         tfidf: &tfidf,
         bert_encoder: &bert_encoder,
+        psy_selector: &psy_selector,
         train_start,
     };
 
@@ -271,10 +281,11 @@ fn extract_features(train_records: &[MbtiRecord], config: &Config) -> FeatureExt
     }
 
     // Extract psychological features if enabled
-    let psy_features = if config.features.use_psychological_features {
-        extract_psychological_features(&train_texts, &config.features.psy_feature_type)?
+    let (psy_features, psy_selector) = if config.features.use_psychological_features {
+        let (features, selector) = extract_psychological_features(&train_texts, &config.features.psy_feature_type)?;
+        (features, selector)
     } else {
-        vec![vec![]; train_texts.len()] // Empty features
+        (vec![vec![]; train_texts.len()], None) // Empty features
     };
 
     // Combine TF-IDF + BERT + Psychological features
@@ -296,14 +307,15 @@ fn extract_features(train_records: &[MbtiRecord], config: &Config) -> FeatureExt
         println!("  Final feature dimension: {}", first.len());
     }
 
-    Ok((train_features, train_labels, tfidf, bert_encoder))
+    Ok((train_features, train_labels, tfidf, bert_encoder, psy_selector))
 }
 
 /// Extract psychological features based on configuration.
+/// Returns (features, optional_selector)
 fn extract_psychological_features(
     texts: &[String],
     feature_type: &str,
-) -> Result<Vec<Vec<f64>>, Box<dyn Error>> {
+) -> Result<(Vec<Vec<f64>>, Option<PearsonFeatureSelector>), Box<dyn Error>> {
     match feature_type {
         "simple" => {
             println!("  Extracting psychological features (simple: 9 features)...");
@@ -318,7 +330,7 @@ fn extract_psychological_features(
                     extractor.extract_features(text)
                 })
                 .collect();
-            Ok(features)
+            Ok((features, None))
         }
         "selected" => {
             println!("  Extracting psychological features (full: 930 → 108 selected)...");
@@ -363,7 +375,10 @@ fn extract_psychological_features(
                 .map(|features| selected_indices.iter().map(|&idx| features[idx]).collect())
                 .collect();
 
-            Ok(selected_features)
+            // Save selector indices for test-time use
+            selector.save("models/feature_selector.json").ok();
+
+            Ok((selected_features, Some(selector)))
         }
         "full" => {
             println!("  Extracting psychological features (full: 930 features)...");
@@ -378,7 +393,7 @@ fn extract_psychological_features(
                     extractor.extract_all_features(text)
                 })
                 .collect();
-            Ok(features)
+            Ok((features, None))
         }
         _ => {
             eprintln!("Unknown psychological feature type: {}", feature_type);
@@ -412,6 +427,7 @@ fn train_multitask_model(params: TrainingParams) -> Result<(), Box<dyn Error>> {
         test_records: params.test_records,
         tfidf: params.tfidf,
         bert_encoder: params.bert_encoder,
+        psy_selector: params.psy_selector,
         train_start: params.train_start,
         config: params.config,
     };
@@ -442,6 +458,7 @@ fn train_singletask_model(params: TrainingParams) -> Result<(), Box<dyn Error>> 
         test_records: params.test_records,
         tfidf: params.tfidf,
         bert_encoder: params.bert_encoder,
+        psy_selector: params.psy_selector,
         train_start: params.train_start,
         config: params.config,
     };
