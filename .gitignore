@@ -22,3 +22,5 @@ Thumbs.db
 *.pdf
 *.py
 models
+*.log
+*.txt
