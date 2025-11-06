@@ -337,8 +337,7 @@ MIT
 ## Acknowledgments
 
 - **rust-bert**: Guillaume BE
-- **Dataset**: MBTI Kaggle Dataset  
-- **Paper**: Zhang et al., "PsyAttention", 2023
+- **Dataset**: MBTI Kaggle Dataset
 
 ---
 
