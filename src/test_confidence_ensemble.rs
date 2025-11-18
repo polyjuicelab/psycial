@@ -132,7 +132,7 @@ pub fn test_confidence_ensemble(threshold: f64) -> Result<(), Box<dyn Error>> {
     let mut ensemble_predictions = Vec::new();
     let mut fallback_count = 0;
 
-    for (i, ((pred_a, conf_a), pred_b)) in preds_conf_a.iter().zip(preds_b.iter()).enumerate() {
+    for ((pred_a, conf_a), pred_b) in preds_conf_a.iter().zip(preds_b.iter()) {
         let min_conf = conf_a.iter().fold(f64::INFINITY, |a, &b| a.min(b));
         
         let final_pred = if min_conf < threshold {

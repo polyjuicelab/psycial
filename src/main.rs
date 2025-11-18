@@ -101,7 +101,7 @@ fn main() {
         "test-orthogonal" => test_orthogonality::test_prediction_orthogonality(),
         "test-ensemble" => test_orthogonality::test_ensemble_strategies(),
         "test-conf-ensemble" => {
-            let threshold = sub_args.get(0)
+            let threshold = sub_args.first()
                 .and_then(|s| s.parse::<f64>().ok())
                 .unwrap_or(0.7);
             test_confidence_ensemble::test_confidence_ensemble(threshold)

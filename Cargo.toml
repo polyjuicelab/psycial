@@ -27,8 +27,8 @@ ndarray = "0.16"
 console = { version = "0.16", features = ["std"] }
 
 # Deep learning dependencies  
-rust-bert = { version = "0.22", features = ["download-libtorch"] }
-tch = "0.14"
+rust-bert = { version = "0.23", features = ["download-libtorch"] }
+tch = "0.17"
 
 # CLI dependencies
 clap = { version = "4.0", features = ["derive"], optional = true }
@@ -37,11 +37,18 @@ clap = { version = "4.0", features = ["derive"], optional = true }
 hf-hub = { version = "0.3", optional = true }
 tokio = { version = "1.35", features = ["rt-multi-thread", "macros"], optional = true }
 
+# Note: protobuf 2.28.0 security vulnerability (RUSTSEC-2024-0437) exists via rust_tokenizers
+# Unfortunately, rust_tokenizers 8.1.1 hardcodes protobuf 2.x dependency and cannot be upgraded.
+# The vulnerability affects protobuf 2.28.0 used internally by rust_tokenizers.
+# We cannot fix this directly - need to wait for rust_tokenizers to support protobuf 3.
+# Project code does not directly use protobuf, so no direct dependency needed.
+
 [features]
-default = ["cli"]
+default = ["cli", "bert"]
 cli = ["clap"]
 auto-download = ["hf-hub", "tokio"]
 gpu = []
+bert = []
 
 [[bin]]
 name = "psycial"

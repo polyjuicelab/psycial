@@ -262,7 +262,9 @@ pub mod neural_net_gpu_multitask;
 pub mod psyattention;
 pub mod psyattention_candle;
 pub mod psyattention_full;
-pub mod tfidf_vectorizer;
+
+// Re-export commonly used items from hybrid module
+pub use hybrid::tfidf::TfidfVectorizer;
 
 // Test/experimental modules
 pub mod test_psy_features;

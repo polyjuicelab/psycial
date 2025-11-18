@@ -87,6 +87,7 @@ impl FeatureNormalizer {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn load(path: &str) -> std::io::Result<Self> {
         let json = std::fs::read_to_string(path)?;
         serde_json::from_str(&json)

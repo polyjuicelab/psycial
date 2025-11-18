@@ -12,7 +12,6 @@ use csv::ReaderBuilder;
 use ndarray::Array2;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 

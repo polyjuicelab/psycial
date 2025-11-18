@@ -41,9 +41,9 @@
 //! let files = config.get_model_files();
 //! ```
 
-use std::path::{Path, PathBuf};
-use std::fs;
+use std::path::PathBuf;
 
+#[cfg(feature = "auto-download")]
 const HF_REPO_ID: &str = "ElderRyan/psycial";
 const DEFAULT_MODEL_DIR: &str = "models";
 
@@ -124,7 +124,7 @@ fn download_from_hf(files: &ModelFiles) -> Result<(), Box<dyn std::error::Error>
 
     // Ensure models directory exists
     if let Some(parent) = files.weights.parent() {
-        fs::create_dir_all(parent)?;
+        std::fs::create_dir_all(parent)?;
     }
 
     let api = Api::new()?;
@@ -136,7 +136,7 @@ fn download_from_hf(files: &ModelFiles) -> Result<(), Box<dyn std::error::Error>
         .ok_or("Invalid weights filename")?;
     println!("  Downloading {}...", weights_filename);
     let downloaded_weights = repo.get(weights_filename)?;
-    fs::copy(&downloaded_weights, &files.weights)?;
+    std::fs::copy(&downloaded_weights, &files.weights)?;
 
     // Download vectorizer
     let vec_filename = files.vectorizer.file_name()
@@ -144,7 +144,7 @@ fn download_from_hf(files: &ModelFiles) -> Result<(), Box<dyn std::error::Error>
         .ok_or("Invalid vectorizer filename")?;
     println!("  Downloading {}...", vec_filename);
     let downloaded_vec = repo.get(vec_filename)?;
-    fs::copy(&downloaded_vec, &files.vectorizer)?;
+    std::fs::copy(&downloaded_vec, &files.vectorizer)?;
 
     Ok(())
 }

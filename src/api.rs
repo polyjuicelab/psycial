@@ -98,17 +98,16 @@
 //! }
 //! ```
 
-use crate::model_loader::{ModelLoaderConfig, ModelType, ensure_model_files};
-use crate::neural_net_gpu_multitask::MultiTaskMLP;
-use crate::tfidf_vectorizer::TfidfVectorizer;
+use crate::model_loader::ensure_model_files;
+use crate::neural_net_gpu_multitask::MultiTaskGpuMLP;
+use crate::TfidfVectorizer;
 use crate::bert_embedder::BertEmbedder;
-use std::path::PathBuf;
 
 pub use crate::model_loader::ModelLoaderConfig as PredictorConfig;
 
 /// Main predictor interface for MBTI personality classification
 pub struct Predictor {
-    model: MultiTaskMLP,
+    model: MultiTaskGpuMLP,
     vectorizer: TfidfVectorizer,
     embedder: BertEmbedder,
     device: tch::Device,
@@ -177,13 +176,21 @@ impl Predictor {
         };
 
         // Load vectorizer
-        let vectorizer = TfidfVectorizer::load(&files.vectorizer)?;
+        let vectorizer = TfidfVectorizer::load(
+            files.vectorizer.to_str().ok_or("Invalid vectorizer path")?
+        )?;
 
         // Load BERT embedder
         let embedder = BertEmbedder::new()?;
 
-        // Load model
-        let model = MultiTaskMLP::load(&files.weights, device)?;
+        // Load model (using default architecture: 5384 input, [1024, 512, 256] hidden, 0.5 dropout)
+        // TF-IDF: 5000 dims, BERT: 384 dims = 5384 total
+        let model = MultiTaskGpuMLP::load(
+            files.weights.to_str().ok_or("Invalid weights path")?,
+            5384,
+            vec![1024, 512, 256],
+            0.5,
+        )?;
 
         Ok(Self {
             model,
@@ -213,41 +220,38 @@ impl Predictor {
     /// ```
     pub fn predict(&self, text: &str) -> Result<PredictionResult, Box<dyn std::error::Error>> {
         // Extract features
-        let tfidf_features = self.vectorizer.transform_single(text);
-        let bert_features = self.embedder.embed_single(text)?;
+        let tfidf_features = self.vectorizer.transform(text);
+        let bert_features = self.embedder.embed(text)?;
 
         // Combine features
         let mut combined = tfidf_features;
         combined.extend(bert_features);
 
         // Get prediction with confidence
-        let predictions = self.model.predict_with_confidence(&[combined])?;
-        
-        if predictions.is_empty() {
-            return Err("No predictions returned".into());
+        let (mbti_type, confidences) = self.model.predict_with_confidence(&combined);
+
+        // Parse MBTI type to get individual letters
+        let chars: Vec<char> = mbti_type.chars().collect();
+        if chars.len() != 4 {
+            return Err(format!("Invalid MBTI type: {}", mbti_type).into());
         }
 
-        let pred = &predictions[0];
-
-        // Build MBTI type string
-        let e_i = if pred[0].0 { 'I' } else { 'E' };
-        let s_n = if pred[1].0 { 'N' } else { 'S' };
-        let t_f = if pred[2].0 { 'F' } else { 'T' };
-        let j_p = if pred[3].0 { 'P' } else { 'J' };
-
-        let mbti_type = format!("{}{}{}{}", e_i, s_n, t_f, j_p);
+        let e_i = chars[0];
+        let s_n = chars[1];
+        let t_f = chars[2];
+        let j_p = chars[3];
 
         // Calculate overall confidence (average of all dimensions)
-        let confidence = (pred[0].1 + pred[1].1 + pred[2].1 + pred[3].1) / 4.0;
+        let confidence = (confidences[0] + confidences[1] + confidences[2] + confidences[3]) / 4.0;
 
         Ok(PredictionResult {
-            mbti_type,
+            mbti_type: mbti_type.clone(),
             confidence,
             dimensions: DimensionPredictions {
-                e_i: DimensionResult { letter: e_i, confidence: pred[0].1 },
-                s_n: DimensionResult { letter: s_n, confidence: pred[1].1 },
-                t_f: DimensionResult { letter: t_f, confidence: pred[2].1 },
-                j_p: DimensionResult { letter: j_p, confidence: pred[3].1 },
+                e_i: DimensionResult { letter: e_i, confidence: confidences[0] },
+                s_n: DimensionResult { letter: s_n, confidence: confidences[1] },
+                t_f: DimensionResult { letter: t_f, confidence: confidences[2] },
+                j_p: DimensionResult { letter: j_p, confidence: confidences[3] },
             },
         })
     }
@@ -260,8 +264,8 @@ impl Predictor {
         let mut all_features = Vec::new();
         
         for text in texts {
-            let tfidf_features = self.vectorizer.transform_single(text);
-            let bert_features = self.embedder.embed_single(text)?;
+            let tfidf_features = self.vectorizer.transform(text);
+            let bert_features = self.embedder.embed(text)?;
             
             let mut combined = tfidf_features;
             combined.extend(bert_features);
@@ -269,26 +273,30 @@ impl Predictor {
         }
 
         // Batch prediction
-        let predictions = self.model.predict_batch_with_confidence(&all_features)?;
+        let predictions = self.model.predict_batch_with_confidence(&all_features);
 
         // Convert to results
-        predictions.iter().map(|pred| {
-            let e_i = if pred[0].0 { 'I' } else { 'E' };
-            let s_n = if pred[1].0 { 'N' } else { 'S' };
-            let t_f = if pred[2].0 { 'F' } else { 'T' };
-            let j_p = if pred[3].0 { 'P' } else { 'J' };
+        predictions.iter().map(|(mbti_type, confidences)| {
+            let chars: Vec<char> = mbti_type.chars().collect();
+            if chars.len() != 4 {
+                return Err(format!("Invalid MBTI type: {}", mbti_type).into());
+            }
 
-            let mbti_type = format!("{}{}{}{}", e_i, s_n, t_f, j_p);
-            let confidence = (pred[0].1 + pred[1].1 + pred[2].1 + pred[3].1) / 4.0;
+            let e_i = chars[0];
+            let s_n = chars[1];
+            let t_f = chars[2];
+            let j_p = chars[3];
+
+            let confidence = (confidences[0] + confidences[1] + confidences[2] + confidences[3]) / 4.0;
 
             Ok(PredictionResult {
-                mbti_type,
+                mbti_type: mbti_type.clone(),
                 confidence,
                 dimensions: DimensionPredictions {
-                    e_i: DimensionResult { letter: e_i, confidence: pred[0].1 },
-                    s_n: DimensionResult { letter: s_n, confidence: pred[1].1 },
-                    t_f: DimensionResult { letter: t_f, confidence: pred[2].1 },
-                    j_p: DimensionResult { letter: j_p, confidence: pred[3].1 },
+                    e_i: DimensionResult { letter: e_i, confidence: confidences[0] },
+                    s_n: DimensionResult { letter: s_n, confidence: confidences[1] },
+                    t_f: DimensionResult { letter: t_f, confidence: confidences[2] },
+                    j_p: DimensionResult { letter: j_p, confidence: confidences[3] },
                 },
             })
         }).collect()
@@ -298,7 +306,7 @@ impl Predictor {
     pub fn model_info(&self) -> ModelInfo {
         ModelInfo {
             device: format!("{:?}", self.device),
-            input_dim: self.vectorizer.vocab_size() + 384, // TF-IDF + BERT
+            input_dim: self.vectorizer.vocabulary.len() + 384, // TF-IDF + BERT
         }
     }
 }
