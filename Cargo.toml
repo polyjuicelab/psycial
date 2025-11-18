@@ -48,3 +48,12 @@ name = "psycial"
 path = "src/main.rs"
 required-features = ["cli"]
 
+# Force dependency versions to fix security vulnerabilities
+# Note: protobuf 2.28.0 and protobuf 3.7.2 are different packages with incompatible APIs
+# We cannot directly patch protobuf 2.28.0 to 3.7.2
+# This is a transitive dependency via rust_tokenizers -> rust-bert
+# Waiting for rust_tokenizers to update or use alternative tokenizer library
+[patch.crates-io]
+# Try to force rust_tokenizers to use a different version if available
+# Note: This may not work if rust_tokenizers 8.1.1 hardcodes protobuf 2.28.0
+

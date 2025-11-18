@@ -1,0 +1,243 @@
+name: CI
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  # Check code formatting
+  format:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  # Run clippy lints
+  clippy:
+    name: Clippy Lints
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Run clippy
+        run: cargo clippy --lib -- -D warnings
+
+  # Build and test
+  test:
+    name: Unit Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        rust: [stable]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ matrix.rust }}
+      
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-${{ matrix.rust }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Install system dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
+      
+      - name: Install system dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install protobuf coreutils || {
+            echo "Failed to install system dependencies"
+            exit 1
+          }
+          COREUTILS_BIN="$(brew --prefix coreutils)/libexec/gnubin"
+          echo "$COREUTILS_BIN" >> $GITHUB_PATH
+      
+      - name: Build
+        run: cargo build --verbose
+      
+      - name: Run unit tests (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          timeout 300 cargo test --lib --test-threads=1 || {
+            echo "Test execution failed or timed out"
+            exit 1
+          }
+      
+      - name: Run unit tests (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          # Find gtimeout - it might be in different locations depending on brew installation
+          BREW_PREFIX=$(brew --prefix coreutils)
+          GTIMEOUT_CMD="$BREW_PREFIX/libexec/gnubin/gtimeout"
+          
+          # Try alternative locations
+          if [ ! -f "$GTIMEOUT_CMD" ]; then
+            GTIMEOUT_CMD="$BREW_PREFIX/bin/gtimeout"
+          fi
+          if [ ! -f "$GTIMEOUT_CMD" ]; then
+            GTIMEOUT_CMD="/opt/homebrew/opt/coreutils/libexec/gnubin/gtimeout"
+          fi
+          if [ ! -f "$GTIMEOUT_CMD" ]; then
+            GTIMEOUT_CMD="/usr/local/opt/coreutils/libexec/gnubin/gtimeout"
+          fi
+          
+          if [ ! -f "$GTIMEOUT_CMD" ]; then
+            echo "ERROR: gtimeout not found"
+            echo "Brew prefix: $BREW_PREFIX"
+            find "$BREW_PREFIX" -name "gtimeout" 2>/dev/null || echo "No gtimeout found in $BREW_PREFIX"
+            exit 1
+          fi
+          
+          echo "Using gtimeout at: $GTIMEOUT_CMD"
+          "$GTIMEOUT_CMD" 300 cargo test --lib --test-threads=1 || {
+            echo "Test execution failed or timed out"
+            exit 1
+          }
+      
+      - name: Run doc tests
+        run: cargo test --doc
+
+  # Security audit
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install cargo-audit
+        run: |
+          if ! command -v cargo-audit &> /dev/null; then
+            echo "Installing cargo-audit..."
+            cargo install cargo-audit --locked || {
+              echo "Failed to install cargo-audit"
+              exit 1
+            }
+          else
+            echo "cargo-audit already installed"
+            cargo-audit --version || exit 1
+          fi
+      
+      - name: Run security audit
+        # Known issues:
+        # RUSTSEC-2024-0437: protobuf 2.28.0 - in rust_tokenizers dependency (transitive via rust-bert)
+        # This is a transitive dependency we cannot directly control
+        # Waiting for rust_tokenizers to update or rust-bert to use newer tokenizers
+        run: |
+          # cargo-audit 0.22.0 is installed as cargo-audit but used as 'cargo audit'
+          AUDIT_OUTPUT=$(cargo audit 2>&1) || {
+            # Known acceptable issues
+            FOUND_ISSUES=$(echo "$AUDIT_OUTPUT" | grep -o "RUSTSEC-[0-9]*-[0-9]*" | sort -u || true)
+            KNOWN_ISSUES="RUSTSEC-2024-0437"
+            
+            NEW_VULNS=""
+            for issue in $FOUND_ISSUES; do
+              if echo "$KNOWN_ISSUES" | grep -q "$issue"; then
+                echo "INFO: Known acceptable issue: $issue (transitive dependency)"
+              else
+                if echo "$AUDIT_OUTPUT" | grep -A 5 "$issue" | grep -q "unmaintained"; then
+                  echo "INFO: Unmaintained warning (acceptable): $issue"
+                else
+                  NEW_VULNS="$NEW_VULNS $issue"
+                fi
+              fi
+            done
+            
+            if [ -n "$NEW_VULNS" ]; then
+              echo "ERROR: Security audit found NEW vulnerabilities:"
+              echo "$NEW_VULNS"
+              echo ""
+              echo "Full audit output:"
+              echo "$AUDIT_OUTPUT"
+              exit 1
+            else
+              echo "WARNING: Only known/acceptable issues found:"
+              echo "- RUSTSEC-2024-0437: protobuf 2.28.0 (in rust_tokenizers transitive dependency)"
+              exit 0
+            fi
+          }
+
+  # Check documentation
+  docs:
+    name: Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-docs-${{ hashFiles('**/Cargo.lock') }}
+      
+      - name: Build documentation
+        run: cargo doc --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
