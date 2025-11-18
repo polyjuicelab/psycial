@@ -5,7 +5,7 @@
 
   [![Rust](https://img.shields.io/badge/Rust-100%25-orange)](https://www.rust-lang.org/)
   [![Accuracy](https://img.shields.io/badge/Best-52.05%25-success)](https://github.com)
-  [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+  [![License](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](LICENSE)
   [![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Model-yellow)](https://huggingface.co/ElderRyan/psycial)
 
   **Production-grade MBTI personality classification system** with neural network implementation in pure Rust.
@@ -371,7 +371,9 @@ rust-bert = { version = "0.22", optional = true, features = ["download-libtorch"
 
 ## License
 
-MIT
+AGPL-3.0
+
+See [LICENSE](LICENSE) file for details.
 
 ---
 
