@@ -116,7 +116,7 @@ jobs:
       - name: Run unit tests (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          timeout 300 cargo test --lib --test-threads=1 || {
+          timeout 300 cargo test --lib -- --test-threads=1 || {
             echo "Test execution failed or timed out"
             exit 1
           }
@@ -147,7 +147,7 @@ jobs:
           fi
           
           echo "Using gtimeout at: $GTIMEOUT_CMD"
-          "$GTIMEOUT_CMD" 300 cargo test --lib --test-threads=1 || {
+          "$GTIMEOUT_CMD" 300 cargo test --lib -- --test-threads=1 || {
             echo "Test execution failed or timed out"
             exit 1
           }
@@ -181,14 +181,15 @@ jobs:
       - name: Run security audit
         # Known issues:
         # RUSTSEC-2024-0437: protobuf 2.28.0 - in rust_tokenizers dependency (transitive via rust-bert)
-        # This is a transitive dependency we cannot directly control
-        # Waiting for rust_tokenizers to update or rust-bert to use newer tokenizers
+        # RUSTSEC-2025-0119: number_prefix 0.4.0 - unmaintained warning (transitive via indicatif -> hf-hub/rust-bert)
+        # These are transitive dependencies we cannot directly control
+        # Waiting for upstream dependencies to update
         run: |
           # cargo-audit 0.22.0 is installed as cargo-audit but used as 'cargo audit'
           AUDIT_OUTPUT=$(cargo audit 2>&1) || {
             # Known acceptable issues
             FOUND_ISSUES=$(echo "$AUDIT_OUTPUT" | grep -o "RUSTSEC-[0-9]*-[0-9]*" | sort -u || true)
-            KNOWN_ISSUES="RUSTSEC-2024-0437"
+            KNOWN_ISSUES="RUSTSEC-2024-0437 RUSTSEC-2025-0119"
             
             NEW_VULNS=""
             for issue in $FOUND_ISSUES; do
@@ -213,6 +214,7 @@ jobs:
             else
               echo "WARNING: Only known/acceptable issues found:"
               echo "- RUSTSEC-2024-0437: protobuf 2.28.0 (in rust_tokenizers transitive dependency)"
+              echo "- RUSTSEC-2025-0119: number_prefix 0.4.0 unmaintained (in indicatif transitive dependency)"
               exit 0
             fi
           }
