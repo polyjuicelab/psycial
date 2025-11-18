@@ -23,8 +23,16 @@ jobs:
         with:
           components: rustfmt
       
+      - name: Format code (auto-fix)
+        run: cargo fmt --all || true
+      
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: |
+          if ! cargo fmt --all -- --check; then
+            echo "ERROR: Code formatting check failed!"
+            echo "Please run 'cargo fmt --all' locally and commit the changes."
+            exit 1
+          fi
 
   # Run clippy lints
   clippy:
