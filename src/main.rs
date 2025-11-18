@@ -14,9 +14,9 @@ mod neural_net_gpu_multitask;
 mod psyattention;
 mod psyattention_candle;
 mod psyattention_full;
-mod test_psy_features;
-mod test_orthogonality;
 mod test_confidence_ensemble;
+mod test_orthogonality;
+mod test_psy_features;
 
 fn print_help() {
     println!(
@@ -101,11 +101,12 @@ fn main() {
         "test-orthogonal" => test_orthogonality::test_prediction_orthogonality(),
         "test-ensemble" => test_orthogonality::test_ensemble_strategies(),
         "test-conf-ensemble" => {
-            let threshold = sub_args.first()
+            let threshold = sub_args
+                .first()
                 .and_then(|s| s.parse::<f64>().ok())
                 .unwrap_or(0.7);
             test_confidence_ensemble::test_confidence_ensemble(threshold)
-        },
+        }
         "scan-thresholds" => test_confidence_ensemble::scan_confidence_thresholds(),
         "help" | "--help" | "-h" => {
             print_help();

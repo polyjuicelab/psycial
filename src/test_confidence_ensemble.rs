@@ -18,7 +18,10 @@ use std::fs::File;
 pub fn test_confidence_ensemble(threshold: f64) -> Result<(), Box<dyn Error>> {
     println!("\n╔═══════════════════════════════════════════════════════════╗");
     println!("║  Testing Confidence-Based Ensemble                        ║");
-    println!("║  Threshold: {:.2}                                           ║", threshold);
+    println!(
+        "║  Threshold: {:.2}                                           ║",
+        threshold
+    );
     println!("╚═══════════════════════════════════════════════════════════╝\n");
 
     // Load data
@@ -26,7 +29,7 @@ pub fn test_confidence_ensemble(threshold: f64) -> Result<(), Box<dyn Error>> {
     let file = File::open(&config.data.csv_path)?;
     let mut rdr = ReaderBuilder::new().has_headers(true).from_reader(file);
     let mut records: Vec<MbtiRecord> = rdr.deserialize().collect::<Result<_, _>>()?;
-    
+
     let mut rng = thread_rng();
     records.shuffle(&mut rng);
     let split = (records.len() as f64 * 0.8) as usize;
@@ -44,14 +47,14 @@ pub fn test_confidence_ensemble(threshold: f64) -> Result<(), Box<dyn Error>> {
     let mut tfidf = TfidfVectorizer::new(5000);
     tfidf.fit(&train_texts);
     let bert_encoder = RustBertEncoder::new()?;
-    
+
     let mut train_features_a = Vec::new();
     for text in &train_texts {
         let mut feat = tfidf.transform(text);
         feat.extend(bert_encoder.extract_features(text)?);
         train_features_a.push(feat);
     }
-    
+
     let mut model_a = MultiTaskGpuMLP::new(5384, vec![1024, 768, 512, 256], 0.001, 0.5, 0.0);
     model_a.train_per_dimension_weighted(
         &train_features_a,
@@ -115,7 +118,7 @@ pub fn test_confidence_ensemble(threshold: f64) -> Result<(), Box<dyn Error>> {
         .iter()
         .map(|text| extractor.extract_all_features(text))
         .collect();
-    
+
     let test_features_b: Vec<Vec<f64>> = all_test_psy
         .into_iter()
         .map(|f| {
@@ -134,7 +137,7 @@ pub fn test_confidence_ensemble(threshold: f64) -> Result<(), Box<dyn Error>> {
 
     for ((pred_a, conf_a), pred_b) in preds_conf_a.iter().zip(preds_b.iter()) {
         let min_conf = conf_a.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        
+
         let final_pred = if min_conf < threshold {
             // Low confidence in Model A -> use Model B
             fallback_count += 1;
@@ -142,7 +145,7 @@ pub fn test_confidence_ensemble(threshold: f64) -> Result<(), Box<dyn Error>> {
         } else {
             pred_a.clone()
         };
-        
+
         ensemble_predictions.push(final_pred);
     }
 
@@ -170,11 +173,31 @@ pub fn test_confidence_ensemble(threshold: f64) -> Result<(), Box<dyn Error>> {
 
     println!("═══════════════════════════════════════════════════════════\n");
     println!("Results:\n");
-    println!("  Model A (TF-IDF+BERT):   {:.2}% ({}/{})", acc_a * 100.0, correct_a, test_labels.len());
-    println!("  Model B (Psychological): {:.2}% ({}/{})", acc_b * 100.0, correct_b, test_labels.len());
-    println!("  Ensemble (threshold={:.2}): {:.2}% ({}/{})", threshold, acc_ensemble * 100.0, correct_ensemble, test_labels.len());
+    println!(
+        "  Model A (TF-IDF+BERT):   {:.2}% ({}/{})",
+        acc_a * 100.0,
+        correct_a,
+        test_labels.len()
+    );
+    println!(
+        "  Model B (Psychological): {:.2}% ({}/{})",
+        acc_b * 100.0,
+        correct_b,
+        test_labels.len()
+    );
+    println!(
+        "  Ensemble (threshold={:.2}): {:.2}% ({}/{})",
+        threshold,
+        acc_ensemble * 100.0,
+        correct_ensemble,
+        test_labels.len()
+    );
     println!();
-    println!("  Fallback to Model B: {} times ({:.1}%)", fallback_count, fallback_count as f64 / total * 100.0);
+    println!(
+        "  Fallback to Model B: {} times ({:.1}%)",
+        fallback_count,
+        fallback_count as f64 / total * 100.0
+    );
     println!();
 
     let improvement = (acc_ensemble - acc_a) * 100.0;
@@ -183,7 +206,10 @@ pub fn test_confidence_ensemble(threshold: f64) -> Result<(), Box<dyn Error>> {
     } else if improvement > -0.5 {
         println!("⚖️  Ensemble shows marginal change ({:+.2}%)", improvement);
     } else {
-        println!("❌ Ensemble DECREASES accuracy by {:.2}%", improvement.abs());
+        println!(
+            "❌ Ensemble DECREASES accuracy by {:.2}%",
+            improvement.abs()
+        );
     }
 
     println!("\n═══════════════════════════════════════════════════════════\n");
@@ -200,7 +226,7 @@ pub fn scan_confidence_thresholds() -> Result<(), Box<dyn Error>> {
     println!("This will take ~5 minutes...\n");
 
     let thresholds = vec![0.5, 0.6, 0.7, 0.8, 0.9];
-    
+
     for &threshold in &thresholds {
         println!("═══════════════════════════════════════════════════════════");
         test_confidence_ensemble(threshold)?;
@@ -211,4 +237,3 @@ pub fn scan_confidence_thresholds() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-

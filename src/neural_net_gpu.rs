@@ -326,13 +326,7 @@ impl GpuMLP {
         Err("GPU MLP requires bert feature".into())
     }
 
-    pub fn load(
-        _: &str,
-        _: i64,
-        _: Vec<i64>,
-        _: i64,
-        _: f64,
-    ) -> Result<Self, Box<dyn Error>> {
+    pub fn load(_: &str, _: i64, _: Vec<i64>, _: i64, _: f64) -> Result<Self, Box<dyn Error>> {
         Err("GPU MLP requires bert feature".into())
     }
 

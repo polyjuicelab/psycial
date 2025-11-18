@@ -98,10 +98,10 @@
 //! }
 //! ```
 
+use crate::bert_embedder::BertEmbedder;
 use crate::model_loader::ensure_model_files;
 use crate::neural_net_gpu_multitask::MultiTaskGpuMLP;
 use crate::TfidfVectorizer;
-use crate::bert_embedder::BertEmbedder;
 
 pub use crate::model_loader::ModelLoaderConfig as PredictorConfig;
 
@@ -118,10 +118,10 @@ pub struct Predictor {
 pub struct PredictionResult {
     /// The predicted MBTI type (e.g., "INTJ")
     pub mbti_type: String,
-    
+
     /// Overall confidence score (0.0 to 1.0)
     pub confidence: f64,
-    
+
     /// Individual dimension predictions
     pub dimensions: DimensionPredictions,
 }
@@ -139,7 +139,7 @@ pub struct DimensionPredictions {
 pub struct DimensionResult {
     /// The predicted letter (e.g., "I", "N", "T", "J")
     pub letter: char,
-    
+
     /// Confidence for this dimension (0.0 to 1.0)
     pub confidence: f64,
 }
@@ -176,9 +176,8 @@ impl Predictor {
         };
 
         // Load vectorizer
-        let vectorizer = TfidfVectorizer::load(
-            files.vectorizer.to_str().ok_or("Invalid vectorizer path")?
-        )?;
+        let vectorizer =
+            TfidfVectorizer::load(files.vectorizer.to_str().ok_or("Invalid vectorizer path")?)?;
 
         // Load BERT embedder
         let embedder = BertEmbedder::new()?;
@@ -248,10 +247,22 @@ impl Predictor {
             mbti_type: mbti_type.clone(),
             confidence,
             dimensions: DimensionPredictions {
-                e_i: DimensionResult { letter: e_i, confidence: confidences[0] },
-                s_n: DimensionResult { letter: s_n, confidence: confidences[1] },
-                t_f: DimensionResult { letter: t_f, confidence: confidences[2] },
-                j_p: DimensionResult { letter: j_p, confidence: confidences[3] },
+                e_i: DimensionResult {
+                    letter: e_i,
+                    confidence: confidences[0],
+                },
+                s_n: DimensionResult {
+                    letter: s_n,
+                    confidence: confidences[1],
+                },
+                t_f: DimensionResult {
+                    letter: t_f,
+                    confidence: confidences[2],
+                },
+                j_p: DimensionResult {
+                    letter: j_p,
+                    confidence: confidences[3],
+                },
             },
         })
     }
@@ -259,14 +270,17 @@ impl Predictor {
     /// Predict MBTI types for multiple texts in batch
     ///
     /// More efficient than calling `predict` multiple times.
-    pub fn predict_batch(&self, texts: &[&str]) -> Result<Vec<PredictionResult>, Box<dyn std::error::Error>> {
+    pub fn predict_batch(
+        &self,
+        texts: &[&str],
+    ) -> Result<Vec<PredictionResult>, Box<dyn std::error::Error>> {
         // Extract features for all texts
         let mut all_features = Vec::new();
-        
+
         for text in texts {
             let tfidf_features = self.vectorizer.transform(text);
             let bert_features = self.embedder.embed(text)?;
-            
+
             let mut combined = tfidf_features;
             combined.extend(bert_features);
             all_features.push(combined);
@@ -276,30 +290,46 @@ impl Predictor {
         let predictions = self.model.predict_batch_with_confidence(&all_features);
 
         // Convert to results
-        predictions.iter().map(|(mbti_type, confidences)| {
-            let chars: Vec<char> = mbti_type.chars().collect();
-            if chars.len() != 4 {
-                return Err(format!("Invalid MBTI type: {}", mbti_type).into());
-            }
+        predictions
+            .iter()
+            .map(|(mbti_type, confidences)| {
+                let chars: Vec<char> = mbti_type.chars().collect();
+                if chars.len() != 4 {
+                    return Err(format!("Invalid MBTI type: {}", mbti_type).into());
+                }
 
-            let e_i = chars[0];
-            let s_n = chars[1];
-            let t_f = chars[2];
-            let j_p = chars[3];
+                let e_i = chars[0];
+                let s_n = chars[1];
+                let t_f = chars[2];
+                let j_p = chars[3];
 
-            let confidence = (confidences[0] + confidences[1] + confidences[2] + confidences[3]) / 4.0;
+                let confidence =
+                    (confidences[0] + confidences[1] + confidences[2] + confidences[3]) / 4.0;
 
-            Ok(PredictionResult {
-                mbti_type: mbti_type.clone(),
-                confidence,
-                dimensions: DimensionPredictions {
-                    e_i: DimensionResult { letter: e_i, confidence: confidences[0] },
-                    s_n: DimensionResult { letter: s_n, confidence: confidences[1] },
-                    t_f: DimensionResult { letter: t_f, confidence: confidences[2] },
-                    j_p: DimensionResult { letter: j_p, confidence: confidences[3] },
-                },
+                Ok(PredictionResult {
+                    mbti_type: mbti_type.clone(),
+                    confidence,
+                    dimensions: DimensionPredictions {
+                        e_i: DimensionResult {
+                            letter: e_i,
+                            confidence: confidences[0],
+                        },
+                        s_n: DimensionResult {
+                            letter: s_n,
+                            confidence: confidences[1],
+                        },
+                        t_f: DimensionResult {
+                            letter: t_f,
+                            confidence: confidences[2],
+                        },
+                        j_p: DimensionResult {
+                            letter: j_p,
+                            confidence: confidences[3],
+                        },
+                    },
+                })
             })
-        }).collect()
+            .collect()
     }
 
     /// Get information about the loaded model
@@ -323,11 +353,30 @@ impl std::fmt::Display for PredictionResult {
         writeln!(f, "MBTI Type: {}", self.mbti_type)?;
         writeln!(f, "Overall Confidence: {:.2}%", self.confidence * 100.0)?;
         writeln!(f, "\nDimension Breakdown:")?;
-        writeln!(f, "  E/I: {} ({:.2}%)", self.dimensions.e_i.letter, self.dimensions.e_i.confidence * 100.0)?;
-        writeln!(f, "  S/N: {} ({:.2}%)", self.dimensions.s_n.letter, self.dimensions.s_n.confidence * 100.0)?;
-        writeln!(f, "  T/F: {} ({:.2}%)", self.dimensions.t_f.letter, self.dimensions.t_f.confidence * 100.0)?;
-        writeln!(f, "  J/P: {} ({:.2}%)", self.dimensions.j_p.letter, self.dimensions.j_p.confidence * 100.0)?;
+        writeln!(
+            f,
+            "  E/I: {} ({:.2}%)",
+            self.dimensions.e_i.letter,
+            self.dimensions.e_i.confidence * 100.0
+        )?;
+        writeln!(
+            f,
+            "  S/N: {} ({:.2}%)",
+            self.dimensions.s_n.letter,
+            self.dimensions.s_n.confidence * 100.0
+        )?;
+        writeln!(
+            f,
+            "  T/F: {} ({:.2}%)",
+            self.dimensions.t_f.letter,
+            self.dimensions.t_f.confidence * 100.0
+        )?;
+        writeln!(
+            f,
+            "  J/P: {} ({:.2}%)",
+            self.dimensions.j_p.letter,
+            self.dimensions.j_p.confidence * 100.0
+        )?;
         Ok(())
     }
 }
-

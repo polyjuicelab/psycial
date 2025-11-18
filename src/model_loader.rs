@@ -91,7 +91,10 @@ impl ModelFiles {
 /// let files = ModelFiles::multitask(None);
 /// ensure_model_files(&files, true).expect("Failed to load model files");
 /// ```
-pub fn ensure_model_files(files: &ModelFiles, auto_download: bool) -> Result<(), Box<dyn std::error::Error>> {
+pub fn ensure_model_files(
+    files: &ModelFiles,
+    auto_download: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     if files.exists() {
         return Ok(());
     }
@@ -131,7 +134,9 @@ fn download_from_hf(files: &ModelFiles) -> Result<(), Box<dyn std::error::Error>
     let repo = api.model(HF_REPO_ID.to_string());
 
     // Download weights
-    let weights_filename = files.weights.file_name()
+    let weights_filename = files
+        .weights
+        .file_name()
         .and_then(|s| s.to_str())
         .ok_or("Invalid weights filename")?;
     println!("  Downloading {}...", weights_filename);
@@ -139,7 +144,9 @@ fn download_from_hf(files: &ModelFiles) -> Result<(), Box<dyn std::error::Error>
     std::fs::copy(&downloaded_weights, &files.weights)?;
 
     // Download vectorizer
-    let vec_filename = files.vectorizer.file_name()
+    let vec_filename = files
+        .vectorizer
+        .file_name()
         .and_then(|s| s.to_str())
         .ok_or("Invalid vectorizer filename")?;
     println!("  Downloading {}...", vec_filename);
@@ -207,14 +214,23 @@ mod tests {
     #[test]
     fn test_model_files_paths() {
         let files = ModelFiles::multitask(None);
-        assert_eq!(files.weights, PathBuf::from("models/mlp_weights_multitask.pt"));
-        assert_eq!(files.vectorizer, PathBuf::from("models/tfidf_vectorizer_multitask.json"));
+        assert_eq!(
+            files.weights,
+            PathBuf::from("models/mlp_weights_multitask.pt")
+        );
+        assert_eq!(
+            files.vectorizer,
+            PathBuf::from("models/tfidf_vectorizer_multitask.json")
+        );
     }
 
     #[test]
     fn test_custom_model_dir() {
         let files = ModelFiles::multitask(Some("/tmp/models"));
-        assert_eq!(files.weights, PathBuf::from("/tmp/models/mlp_weights_multitask.pt"));
+        assert_eq!(
+            files.weights,
+            PathBuf::from("/tmp/models/mlp_weights_multitask.pt")
+        );
     }
 
     #[test]
@@ -222,9 +238,8 @@ mod tests {
         let config = ModelLoaderConfig::new()
             .with_model_dir("custom_models")
             .with_auto_download(true);
-        
+
         assert_eq!(config.model_dir, Some("custom_models".to_string()));
         assert!(config.auto_download);
     }
 }
-

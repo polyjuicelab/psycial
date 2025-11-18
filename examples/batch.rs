@@ -4,7 +4,6 @@
 /// ```
 /// cargo run --example batch --features auto-download
 /// ```
-
 use psycial::api::Predictor;
 use std::time::Instant;
 
@@ -26,13 +25,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ];
 
     println!("Predicting {} texts in batch...\n", texts.len());
-    
+
     let start = Instant::now();
     let results = predictor.predict_batch(&texts)?;
     let elapsed = start.elapsed();
 
     println!("{}", "=".repeat(90));
-    println!("{:<50} | {:^8} | {:>8}", "Text (truncated)", "Type", "Conf %");
+    println!(
+        "{:<50} | {:^8} | {:>8}",
+        "Text (truncated)", "Type", "Conf %"
+    );
     println!("{}", "=".repeat(90));
 
     for (text, result) in texts.iter().zip(results.iter()) {
@@ -41,19 +43,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             text.to_string()
         };
-        
-        println!("{:<50} | {:^8} | {:>7.1}%", 
-                 truncated,
-                 result.mbti_type,
-                 result.confidence * 100.0);
+
+        println!(
+            "{:<50} | {:^8} | {:>7.1}%",
+            truncated,
+            result.mbti_type,
+            result.confidence * 100.0
+        );
     }
 
     println!("{}", "=".repeat(90));
     println!("\n✓ Batch prediction complete");
-    println!("  Time: {:.2}ms ({:.2}ms per text)", 
-             elapsed.as_millis(),
-             elapsed.as_millis() as f64 / texts.len() as f64);
+    println!(
+        "  Time: {:.2}ms ({:.2}ms per text)",
+        elapsed.as_millis(),
+        elapsed.as_millis() as f64 / texts.len() as f64
+    );
 
     Ok(())
 }
-

@@ -27,14 +27,18 @@ pub fn test_prediction_orthogonality() -> Result<(), Box<dyn Error>> {
     let file = File::open(&config.data.csv_path)?;
     let mut rdr = ReaderBuilder::new().has_headers(true).from_reader(file);
     let mut records: Vec<MbtiRecord> = rdr.deserialize().collect::<Result<_, _>>()?;
-    
+
     let mut rng = thread_rng();
     records.shuffle(&mut rng);
     let split = (records.len() as f64 * 0.8) as usize;
     let train_records = &records[..split];
     let test_records = &records[split..];
 
-    println!("  Train: {} | Test: {}\n", train_records.len(), test_records.len());
+    println!(
+        "  Train: {} | Test: {}\n",
+        train_records.len(),
+        test_records.len()
+    );
 
     let train_texts: Vec<String> = train_records.iter().map(|r| r.posts.clone()).collect();
     let train_labels: Vec<String> = train_records.iter().map(|r| r.mbti_type.clone()).collect();
@@ -48,10 +52,10 @@ pub fn test_prediction_orthogonality() -> Result<(), Box<dyn Error>> {
     println!("Extracting TF-IDF features...");
     let mut tfidf = TfidfVectorizer::new(5000);
     tfidf.fit(&train_texts);
-    
+
     println!("Extracting BERT features...");
     let bert_encoder = RustBertEncoder::new()?;
-    
+
     let mut train_features_a = Vec::new();
     for (i, text) in train_texts.iter().enumerate() {
         if (i + 1) % 1000 == 0 {
@@ -61,7 +65,7 @@ pub fn test_prediction_orthogonality() -> Result<(), Box<dyn Error>> {
         feat.extend(bert_encoder.extract_features(text)?);
         train_features_a.push(feat);
     }
-    
+
     println!("Training Model A...");
     let mut model_a = MultiTaskGpuMLP::new(5384, vec![768, 512, 256], 0.001, 0.5, 0.0);
     model_a.train_per_dimension_weighted(
@@ -139,7 +143,7 @@ pub fn test_prediction_orthogonality() -> Result<(), Box<dyn Error>> {
         .iter()
         .map(|text| extractor.extract_all_features(text))
         .collect();
-    
+
     let test_features_b: Vec<Vec<f64>> = all_test_psy
         .into_iter()
         .map(|f| {
@@ -171,8 +175,12 @@ pub fn test_prediction_orthogonality() -> Result<(), Box<dyn Error>> {
         let a_right = pred_a == truth;
         let b_right = pred_b == truth;
 
-        if a_right { correct_a += 1; }
-        if b_right { correct_b += 1; }
+        if a_right {
+            correct_a += 1;
+        }
+        if b_right {
+            correct_b += 1;
+        }
 
         match (a_right, b_right) {
             (true, true) => both_correct += 1,
@@ -186,15 +194,41 @@ pub fn test_prediction_orthogonality() -> Result<(), Box<dyn Error>> {
     let acc_a = correct_a as f64 / total;
     let acc_b = correct_b as f64 / total;
 
-    println!("Model A (TF-IDF+BERT):   {:.2}% ({}/{})", acc_a * 100.0, correct_a, test_labels.len());
-    println!("Model B (Psychological): {:.2}% ({}/{})", acc_b * 100.0, correct_b, test_labels.len());
+    println!(
+        "Model A (TF-IDF+BERT):   {:.2}% ({}/{})",
+        acc_a * 100.0,
+        correct_a,
+        test_labels.len()
+    );
+    println!(
+        "Model B (Psychological): {:.2}% ({}/{})",
+        acc_b * 100.0,
+        correct_b,
+        test_labels.len()
+    );
     println!();
 
     println!("Prediction Overlap:");
-    println!("  Both correct:    {} ({:.1}%)", both_correct, both_correct as f64 / total * 100.0);
-    println!("  Both wrong:      {} ({:.1}%)", both_wrong, both_wrong as f64 / total * 100.0);
-    println!("  Only A correct:  {} ({:.1}%)", only_a_correct, only_a_correct as f64 / total * 100.0);
-    println!("  Only B correct:  {} ({:.1}%)", only_b_correct, only_b_correct as f64 / total * 100.0);
+    println!(
+        "  Both correct:    {} ({:.1}%)",
+        both_correct,
+        both_correct as f64 / total * 100.0
+    );
+    println!(
+        "  Both wrong:      {} ({:.1}%)",
+        both_wrong,
+        both_wrong as f64 / total * 100.0
+    );
+    println!(
+        "  Only A correct:  {} ({:.1}%)",
+        only_a_correct,
+        only_a_correct as f64 / total * 100.0
+    );
+    println!(
+        "  Only B correct:  {} ({:.1}%)",
+        only_b_correct,
+        only_b_correct as f64 / total * 100.0
+    );
     println!();
 
     // Calculate agreement rate (both models agree)
@@ -205,7 +239,12 @@ pub fn test_prediction_orthogonality() -> Result<(), Box<dyn Error>> {
         .count();
     let agreement_rate = agreement as f64 / total;
 
-    println!("Agreement Rate: {:.2}% ({}/{})", agreement_rate * 100.0, agreement, test_labels.len());
+    println!(
+        "Agreement Rate: {:.2}% ({}/{})",
+        agreement_rate * 100.0,
+        agreement,
+        test_labels.len()
+    );
     println!();
 
     // Orthogonality analysis
@@ -217,39 +256,54 @@ pub fn test_prediction_orthogonality() -> Result<(), Box<dyn Error>> {
     let actual_both_correct = both_correct as f64;
     let correlation = (actual_both_correct - expected_both_correct) / total;
 
-    println!("  Expected both correct (if independent): {:.1}", expected_both_correct);
-    println!("  Actual both correct:                   {:.1}", actual_both_correct);
-    println!("  Correlation factor:                    {:.4}\n", correlation);
+    println!(
+        "  Expected both correct (if independent): {:.1}",
+        expected_both_correct
+    );
+    println!(
+        "  Actual both correct:                   {:.1}",
+        actual_both_correct
+    );
+    println!(
+        "  Correlation factor:                    {:.4}\n",
+        correlation
+    );
 
     if only_b_correct > 20 {
-        println!("✅ Model B catches {} cases that Model A misses!", only_b_correct);
+        println!(
+            "✅ Model B catches {} cases that Model A misses!",
+            only_b_correct
+        );
         println!("   → Ensemble may help!\n");
-        
+
         // Test simple ensemble
         println!("Testing Simple Ensemble (Voting):\n");
         let mut ensemble_correct = 0;
-        
+
         for i in 0..test_labels.len() {
             let pred_a = &predictions_a[i];
-            let pred_b = &predictions_b[i];
-            
-            // If they agree, use their prediction
-            // If disagree, use Model A (higher accuracy)
-            let ensemble_pred = if pred_a == pred_b {
-                pred_a
-            } else {
-                pred_a // Trust the stronger model
-            };
-            
+            let _pred_b = &predictions_b[i]; // Model B predictions (for reference)
+
+            // Use Model A prediction (higher accuracy model)
+            let ensemble_pred = pred_a;
+
             if ensemble_pred == &test_labels[i] {
                 ensemble_correct += 1;
             }
         }
-        
+
         let ensemble_acc = ensemble_correct as f64 / total;
-        println!("  Ensemble Accuracy: {:.2}% ({}/{})", ensemble_acc * 100.0, ensemble_correct, test_labels.len());
-        println!("  Improvement over A: {:.2}%", (ensemble_acc - acc_a) * 100.0);
-        
+        println!(
+            "  Ensemble Accuracy: {:.2}% ({}/{})",
+            ensemble_acc * 100.0,
+            ensemble_correct,
+            test_labels.len()
+        );
+        println!(
+            "  Improvement over A: {:.2}%",
+            (ensemble_acc - acc_a) * 100.0
+        );
+
         if ensemble_acc > acc_a {
             println!("\n🎉 Ensemble IMPROVES accuracy!");
             println!("   Recommendation: Use weighted voting or soft ensemble");
@@ -285,7 +339,10 @@ pub fn test_prediction_orthogonality() -> Result<(), Box<dyn Error>> {
             let pred_a_chars: Vec<char> = predictions_a[i].chars().collect();
             let pred_b_chars: Vec<char> = predictions_b[i].chars().collect();
 
-            if truth_chars.len() > dim_idx && pred_a_chars.len() > dim_idx && pred_b_chars.len() > dim_idx {
+            if truth_chars.len() > dim_idx
+                && pred_a_chars.len() > dim_idx
+                && pred_b_chars.len() > dim_idx
+            {
                 let a_right = pred_a_chars[dim_idx] == truth_chars[dim_idx];
                 let b_right = pred_b_chars[dim_idx] == truth_chars[dim_idx];
 
@@ -298,9 +355,11 @@ pub fn test_prediction_orthogonality() -> Result<(), Box<dyn Error>> {
             }
         }
 
-        println!("{}: Both✓={}, A✓={}, B✓={}, Both✗={}", 
-            dim_name, dim_both_correct, dim_only_a, dim_only_b, dim_both_wrong);
-        
+        println!(
+            "{}: Both✓={}, A✓={}, B✓={}, Both✗={}",
+            dim_name, dim_both_correct, dim_only_a, dim_only_b, dim_both_wrong
+        );
+
         if dim_only_b > 10 {
             println!("  → {} complementary predictions possible!", dim_only_b);
         }
@@ -352,4 +411,3 @@ pub fn test_ensemble_strategies() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-

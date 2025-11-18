@@ -219,22 +219,22 @@ impl MultiTaskGpuMLP {
 
                 if epoch < epochs_ei {
                     let loss_ei = logits_ei.cross_entropy_for_logits(&batch_y_ei);
-                    weighted_loss = weighted_loss + &loss_ei * dimension_weights[0];
+                    weighted_loss += &loss_ei * dimension_weights[0];
                     total_weight += dimension_weights[0];
                 }
                 if epoch < epochs_sn {
                     let loss_sn = logits_sn.cross_entropy_for_logits(&batch_y_sn);
-                    weighted_loss = weighted_loss + &loss_sn * dimension_weights[1];
+                    weighted_loss += &loss_sn * dimension_weights[1];
                     total_weight += dimension_weights[1];
                 }
                 if epoch < epochs_tf {
                     let loss_tf = logits_tf.cross_entropy_for_logits(&batch_y_tf);
-                    weighted_loss = weighted_loss + &loss_tf * dimension_weights[2];
+                    weighted_loss += &loss_tf * dimension_weights[2];
                     total_weight += dimension_weights[2];
                 }
                 if epoch < epochs_jp {
                     let loss_jp = logits_jp.cross_entropy_for_logits(&batch_y_jp);
-                    weighted_loss = weighted_loss + &loss_jp * dimension_weights[3];
+                    weighted_loss += &loss_jp * dimension_weights[3];
                     total_weight += dimension_weights[3];
                 }
 
@@ -407,7 +407,10 @@ impl MultiTaskGpuMLP {
             let tf = if pred_tf == 0 { 'T' } else { 'F' };
             let jp = if pred_jp == 0 { 'J' } else { 'P' };
 
-            (format!("{}{}{}{}", ei, sn, tf, jp), [conf_ei, conf_sn, conf_tf, conf_jp])
+            (
+                format!("{}{}{}{}", ei, sn, tf, jp),
+                [conf_ei, conf_sn, conf_tf, conf_jp],
+            )
         })
     }
 
@@ -420,7 +423,10 @@ impl MultiTaskGpuMLP {
     }
 
     /// Batch prediction with confidence scores
-    pub fn predict_batch_with_confidence(&self, features_batch: &[Vec<f64>]) -> Vec<(String, [f64; 4])> {
+    pub fn predict_batch_with_confidence(
+        &self,
+        features_batch: &[Vec<f64>],
+    ) -> Vec<(String, [f64; 4])> {
         features_batch
             .iter()
             .map(|features| self.predict_with_confidence(features))

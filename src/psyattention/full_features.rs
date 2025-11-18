@@ -170,8 +170,7 @@ impl PearsonFeatureSelector {
 
     /// Save feature selector to JSON file
     pub fn save(&self, path: &str) -> std::io::Result<()> {
-        let json = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let json = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
         std::fs::write(path, json)?;
         println!("  ✓ Feature selector saved to {}", path);
         Ok(())
@@ -180,8 +179,7 @@ impl PearsonFeatureSelector {
     /// Load feature selector from JSON file
     pub fn load(path: &str) -> std::io::Result<Self> {
         let json = std::fs::read_to_string(path)?;
-        let selector = serde_json::from_str(&json)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let selector = serde_json::from_str(&json).map_err(std::io::Error::other)?;
         Ok(selector)
     }
 

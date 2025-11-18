@@ -4,12 +4,12 @@ use super::config::Config;
 use super::data::MbtiRecord;
 use super::save::{save_model, save_model_singletask};
 use super::tfidf::TfidfVectorizer;
+use super::train::FeatureNormalizer;
 use crate::neural_net_gpu::GpuMLP;
 use crate::neural_net_gpu_multitask::MultiTaskGpuMLP;
 use crate::psyattention::bert_rustbert::RustBertEncoder;
 use crate::psyattention::full_features::{FullPsychologicalExtractor, PearsonFeatureSelector};
 use crate::psyattention::psychological_features::PsychologicalFeatureExtractor;
-use super::train::FeatureNormalizer;
 use std::error::Error;
 use std::time::Instant;
 
@@ -77,14 +77,14 @@ pub fn evaluate_multitask_model(
                     .iter()
                     .map(|text| extractor.extract_all_features(text))
                     .collect();
-                
+
                 // Apply saved selector and normalize
                 if let Some(selector) = ctx.psy_selector {
                     let selected: Vec<Vec<f64>> = all_features
                         .into_iter()
                         .map(|features| selector.transform(&features))
                         .collect();
-                    
+
                     // Normalize using saved normalizer
                     if let Some(normalizer) = ctx.psy_normalizer {
                         selected
@@ -121,7 +121,7 @@ pub fn evaluate_multitask_model(
         let tfidf_feat = ctx.tfidf.transform(text);
         let bert_feat = ctx.bert_encoder.extract_features(text)?;
         let psy_feat = &test_psy_features[i];
-        
+
         let mut combined = tfidf_feat;
         combined.extend(bert_feat);
         combined.extend(psy_feat);
@@ -129,7 +129,7 @@ pub fn evaluate_multitask_model(
     }
 
     let test_predictions = mlp.predict_batch(&test_features);
-    
+
     // Calculate overall accuracy
     let mut correct = 0;
     for (pred, label) in test_predictions.iter().zip(test_labels.iter()) {
@@ -138,15 +138,15 @@ pub fn evaluate_multitask_model(
         }
     }
     let test_acc = correct as f64 / test_labels.len() as f64;
-    
+
     // Calculate per-dimension accuracy
     let mut dim_correct = [0usize; 4]; // [E/I, S/N, T/F, J/P]
     let total = test_labels.len();
-    
+
     for (pred, label) in test_predictions.iter().zip(test_labels.iter()) {
         let pred_chars: Vec<char> = pred.chars().collect();
         let label_chars: Vec<char> = label.chars().collect();
-        
+
         if pred_chars.len() >= 4 && label_chars.len() >= 4 {
             // E/I dimension
             if pred_chars[0] == label_chars[0] {
@@ -166,17 +166,33 @@ pub fn evaluate_multitask_model(
             }
         }
     }
-    
+
     println!("  Overall Accuracy: {:.2}%", test_acc * 100.0);
     println!("  Per-Dimension Accuracy:");
-    println!("    E/I: {:.2}% ({}/{})", 
-        dim_correct[0] as f64 / total as f64 * 100.0, dim_correct[0], total);
-    println!("    S/N: {:.2}% ({}/{})", 
-        dim_correct[1] as f64 / total as f64 * 100.0, dim_correct[1], total);
-    println!("    T/F: {:.2}% ({}/{})", 
-        dim_correct[2] as f64 / total as f64 * 100.0, dim_correct[2], total);
-    println!("    J/P: {:.2}% ({}/{})", 
-        dim_correct[3] as f64 / total as f64 * 100.0, dim_correct[3], total);
+    println!(
+        "    E/I: {:.2}% ({}/{})",
+        dim_correct[0] as f64 / total as f64 * 100.0,
+        dim_correct[0],
+        total
+    );
+    println!(
+        "    S/N: {:.2}% ({}/{})",
+        dim_correct[1] as f64 / total as f64 * 100.0,
+        dim_correct[1],
+        total
+    );
+    println!(
+        "    T/F: {:.2}% ({}/{})",
+        dim_correct[2] as f64 / total as f64 * 100.0,
+        dim_correct[2],
+        total
+    );
+    println!(
+        "    J/P: {:.2}% ({}/{})",
+        dim_correct[3] as f64 / total as f64 * 100.0,
+        dim_correct[3],
+        total
+    );
     println!("  Time: {:.2}s\n", test_start.elapsed().as_secs_f64());
 
     print_results(test_acc);

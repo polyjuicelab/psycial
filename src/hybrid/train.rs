@@ -80,8 +80,7 @@ impl FeatureNormalizer {
     }
 
     pub fn save(&self, path: &str) -> std::io::Result<()> {
-        let json = serde_json::to_string_pretty(self)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        let json = serde_json::to_string_pretty(self).map_err(std::io::Error::other)?;
         std::fs::write(path, json)?;
         println!("  ✓ Feature normalizer saved to {}", path);
         Ok(())
@@ -90,8 +89,7 @@ impl FeatureNormalizer {
     #[allow(dead_code)]
     pub fn load(path: &str) -> std::io::Result<Self> {
         let json = std::fs::read_to_string(path)?;
-        serde_json::from_str(&json)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+        serde_json::from_str(&json).map_err(std::io::Error::other)
     }
 }
 
@@ -182,7 +180,7 @@ pub fn train_model(model_type_override: Option<&str>) -> Result<(), Box<dyn Erro
     // Extract features
     let (train_features, train_labels, tfidf, bert_encoder, psy_selector, psy_normalizer) =
         extract_features(train_records, &config)?;
-    
+
     // Save normalizer if psychological features are used
     if let Some(ref normalizer) = psy_normalizer {
         normalizer.save("models/feature_normalizer.json").ok();
@@ -199,7 +197,7 @@ pub fn train_model(model_type_override: Option<&str>) -> Result<(), Box<dyn Erro
         "\nTraining GPU-Accelerated MLP ({})...",
         config.model.model_type
     );
-    
+
     // Calculate input dimension based on enabled features
     let psy_dim = if config.features.use_psychological_features {
         match config.features.psy_feature_type.as_str() {
@@ -211,9 +209,9 @@ pub fn train_model(model_type_override: Option<&str>) -> Result<(), Box<dyn Erro
     } else {
         0
     };
-    
+
     let input_dim = config.features.max_tfidf_features + 384 + psy_dim;
-    
+
     let feature_desc = if psy_dim > 0 {
         format!(
             "  Input: {} features ({} TF-IDF + 384 BERT + {} Psy)",
@@ -289,7 +287,7 @@ fn print_training_header(config: &Config) {
     } else {
         "16"
     };
-    
+
     // Calculate input dimension including psychological features
     let psy_dim = if config.features.use_psychological_features {
         match config.features.psy_feature_type.as_str() {
@@ -302,12 +300,10 @@ fn print_training_header(config: &Config) {
         0
     };
     let input_dim = config.features.max_tfidf_features + 384 + psy_dim;
-    
+
     println!(
         "  Architecture: {} -> {:?} -> {}",
-        input_dim,
-        config.model.hidden_layers,
-        output_desc
+        input_dim, config.model.hidden_layers, output_desc
     );
     println!("  Learning rate: {}", config.model.learning_rate);
     println!("  Dropout: {}", config.model.dropout_rate);
@@ -368,14 +364,18 @@ fn extract_features(train_records: &[MbtiRecord], config: &Config) -> FeatureExt
 
     // Extract psychological features if enabled
     let (psy_features, psy_selector) = if config.features.use_psychological_features {
-        let (features, selector) = extract_psychological_features(&train_texts, &config.features.psy_feature_type)?;
+        let (features, selector) =
+            extract_psychological_features(&train_texts, &config.features.psy_feature_type)?;
         (features, selector)
     } else {
         (vec![vec![]; train_texts.len()], None) // Empty features
     };
 
     // Normalize psychological features if enabled
-    let (normalized_psy_features, psy_normalizer) = if config.features.use_psychological_features && !psy_features.is_empty() && !psy_features[0].is_empty() {
+    let (normalized_psy_features, psy_normalizer) = if config.features.use_psychological_features
+        && !psy_features.is_empty()
+        && !psy_features[0].is_empty()
+    {
         println!("  Normalizing psychological features...");
         let normalizer = FeatureNormalizer::fit(&psy_features);
         let normalized: Vec<Vec<f64>> = psy_features
@@ -404,31 +404,31 @@ fn extract_features(train_records: &[MbtiRecord], config: &Config) -> FeatureExt
     // Report final feature dimensions and statistics
     if let Some(first) = train_features.first() {
         println!("  Final feature dimension: {}", first.len());
-        
+
         // Diagnose feature value ranges
         if config.features.use_psychological_features {
             println!("\n  Feature Statistics (first sample):");
             let tfidf_end = config.features.max_tfidf_features;
             let bert_end = tfidf_end + 384;
             let psy_end = first.len();
-            
+
             if first.len() >= psy_end {
                 let tfidf_vals = &first[..tfidf_end];
                 let bert_vals = &first[tfidf_end..bert_end];
                 let psy_vals = &first[bert_end..psy_end];
-                
+
                 let tfidf_max = tfidf_vals.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
                 let bert_max = bert_vals.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
                 let psy_max = psy_vals.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-                
+
                 let tfidf_min = tfidf_vals.iter().fold(f64::INFINITY, |a, &b| a.min(b));
                 let bert_min = bert_vals.iter().fold(f64::INFINITY, |a, &b| a.min(b));
                 let psy_min = psy_vals.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-                
+
                 println!("    TF-IDF range: [{:.4}, {:.4}]", tfidf_min, tfidf_max);
                 println!("    BERT range:   [{:.4}, {:.4}]", bert_min, bert_max);
                 println!("    Psy range:    [{:.4}, {:.4}]", psy_min, psy_max);
-                
+
                 // Check for NaN/Inf
                 let has_nan = psy_vals.iter().any(|&x| x.is_nan() || x.is_infinite());
                 if has_nan {
@@ -438,8 +438,19 @@ fn extract_features(train_records: &[MbtiRecord], config: &Config) -> FeatureExt
         }
     }
 
-    Ok((train_features, train_labels, tfidf, bert_encoder, psy_selector, psy_normalizer))
+    Ok((
+        train_features,
+        train_labels,
+        tfidf,
+        bert_encoder,
+        psy_selector,
+        psy_normalizer,
+    ))
 }
+
+/// Type alias for psychological feature extraction result
+type PsychologicalFeaturesResult =
+    Result<(Vec<Vec<f64>>, Option<PearsonFeatureSelector>), Box<dyn Error>>;
 
 /// Extract psychological features based on configuration.
 /// Returns (features, optional_selector)  
@@ -447,7 +458,7 @@ fn extract_features(train_records: &[MbtiRecord], config: &Config) -> FeatureExt
 fn extract_psychological_features(
     texts: &[String],
     feature_type: &str,
-) -> Result<(Vec<Vec<f64>>, Option<PearsonFeatureSelector>), Box<dyn Error>> {
+) -> PsychologicalFeaturesResult {
     match feature_type {
         "simple" => {
             println!("  Extracting psychological features (simple: 9 features)...");

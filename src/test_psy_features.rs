@@ -27,7 +27,7 @@ pub fn test_psychological_features_only(feature_type: &str) -> Result<(), Box<dy
     let file = File::open(&config.data.csv_path)?;
     let mut rdr = ReaderBuilder::new().has_headers(true).from_reader(file);
     let mut records: Vec<MbtiRecord> = rdr.deserialize().collect::<Result<_, _>>()?;
-    
+
     println!("  Loaded {} records\n", records.len());
 
     // Shuffle and split
@@ -37,7 +37,11 @@ pub fn test_psychological_features_only(feature_type: &str) -> Result<(), Box<dy
     let train_records = &records[..split];
     let test_records = &records[split..];
 
-    println!("Train: {} | Test: {}\n", train_records.len(), test_records.len());
+    println!(
+        "Train: {} | Test: {}\n",
+        train_records.len(),
+        test_records.len()
+    );
     println!("═══════════════════════════════════════════════════════════\n");
 
     // Extract features
@@ -60,23 +64,21 @@ pub fn test_psychological_features_only(feature_type: &str) -> Result<(), Box<dy
                     extractor.extract_features(text)
                 })
                 .collect();
-            
+
             println!("  ✓ Extracted 9 features\n");
-            
+
             // Normalize
             println!("Normalizing features...");
             let normalizer = FeatureNormalizer::fit(&features);
-            let normalized: Vec<Vec<f64>> = features
-                .iter()
-                .map(|f| normalizer.transform(f))
-                .collect();
-            
+            let normalized: Vec<Vec<f64>> =
+                features.iter().map(|f| normalizer.transform(f)).collect();
+
             (normalized, None, Some(normalizer))
         }
         "selected" => {
             println!("Extracting SELECTED psychological features (930 → 108)...");
             let extractor = FullPsychologicalExtractor::new();
-            
+
             println!("  Extracting all 930 features...");
             let all_features: Vec<Vec<f64>> = train_texts
                 .iter()
@@ -101,7 +103,7 @@ pub fn test_psychological_features_only(feature_type: &str) -> Result<(), Box<dy
 
             let mut selector = PearsonFeatureSelector::new(0.85);
             let selected_indices = selector.fit(&feature_matrix, 108);
-            
+
             println!("  ✓ Selected {} features\n", selected_indices.len());
 
             // Apply selection
@@ -113,11 +115,9 @@ pub fn test_psychological_features_only(feature_type: &str) -> Result<(), Box<dy
             // Normalize
             println!("Normalizing features...");
             let normalizer = FeatureNormalizer::fit(&selected);
-            let normalized: Vec<Vec<f64>> = selected
-                .iter()
-                .map(|f| normalizer.transform(f))
-                .collect();
-            
+            let normalized: Vec<Vec<f64>> =
+                selected.iter().map(|f| normalizer.transform(f)).collect();
+
             (normalized, Some(selector), Some(normalizer))
         }
         _ => {
@@ -131,10 +131,10 @@ pub fn test_psychological_features_only(feature_type: &str) -> Result<(), Box<dy
         let max_val = first.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
         let min_val = first.iter().fold(f64::INFINITY, |a, &b| a.min(b));
         let mean_val: f64 = first.iter().sum::<f64>() / first.len() as f64;
-        
+
         println!("  Range: [{:.4}, {:.4}]", min_val, max_val);
         println!("  Mean:  {:.4}", mean_val);
-        
+
         let has_nan = first.iter().any(|&x| x.is_nan() || x.is_infinite());
         if has_nan {
             println!("  ⚠️  WARNING: Contains NaN/Inf!");
@@ -146,7 +146,7 @@ pub fn test_psychological_features_only(feature_type: &str) -> Result<(), Box<dy
     // Train multi-task model with ONLY psychological features
     println!("═══════════════════════════════════════════════════════════\n");
     println!("Training Multi-Task Model (Psychological Features ONLY)...\n");
-    
+
     let input_dim = train_features[0].len() as i64;
     println!("  Input: {} features (psychological only)", input_dim);
     println!("  Architecture: {} -> [256, 128, 64] -> 4×2", input_dim);
@@ -193,7 +193,7 @@ pub fn test_psychological_features_only(feature_type: &str) -> Result<(), Box<dy
                 .iter()
                 .map(|text| extractor.extract_features(text))
                 .collect();
-            
+
             // Normalize with training normalizer
             if let Some(ref norm) = normalizer {
                 features.iter().map(|f| norm.transform(f)).collect()
@@ -207,14 +207,14 @@ pub fn test_psychological_features_only(feature_type: &str) -> Result<(), Box<dy
                 .iter()
                 .map(|text| extractor.extract_all_features(text))
                 .collect();
-            
+
             // Apply selector and normalize
             if let Some(ref sel) = selector {
                 let selected: Vec<Vec<f64>> = all_features
                     .into_iter()
                     .map(|f| sel.transform(&f))
                     .collect();
-                
+
                 if let Some(ref norm) = normalizer {
                     selected.iter().map(|f| norm.transform(f)).collect()
                 } else {
@@ -229,7 +229,7 @@ pub fn test_psychological_features_only(feature_type: &str) -> Result<(), Box<dy
 
     // Evaluate on test set
     let test_predictions = mlp.predict_batch(&test_features);
-    
+
     let mut correct = 0;
     for (pred, label) in test_predictions.iter().zip(test_labels.iter()) {
         if pred == label {
@@ -241,35 +241,63 @@ pub fn test_psychological_features_only(feature_type: &str) -> Result<(), Box<dy
     // Calculate per-dimension accuracy
     let mut dim_correct = [0usize; 4];
     let total = test_labels.len();
-    
+
     for (pred, label) in test_predictions.iter().zip(test_labels.iter()) {
         let pred_chars: Vec<char> = pred.chars().collect();
         let label_chars: Vec<char> = label.chars().collect();
-        
+
         if pred_chars.len() >= 4 && label_chars.len() >= 4 {
-            if pred_chars[0] == label_chars[0] { dim_correct[0] += 1; }
-            if pred_chars[1] == label_chars[1] { dim_correct[1] += 1; }
-            if pred_chars[2] == label_chars[2] { dim_correct[2] += 1; }
-            if pred_chars[3] == label_chars[3] { dim_correct[3] += 1; }
+            if pred_chars[0] == label_chars[0] {
+                dim_correct[0] += 1;
+            }
+            if pred_chars[1] == label_chars[1] {
+                dim_correct[1] += 1;
+            }
+            if pred_chars[2] == label_chars[2] {
+                dim_correct[2] += 1;
+            }
+            if pred_chars[3] == label_chars[3] {
+                dim_correct[3] += 1;
+            }
         }
     }
-    
+
     println!("  Overall Accuracy: {:.2}%", test_acc * 100.0);
     println!("  Per-Dimension Accuracy:");
-    println!("    E/I: {:.2}% ({}/{})", dim_correct[0] as f64 / total as f64 * 100.0, dim_correct[0], total);
-    println!("    S/N: {:.2}% ({}/{})", dim_correct[1] as f64 / total as f64 * 100.0, dim_correct[1], total);
-    println!("    T/F: {:.2}% ({}/{})", dim_correct[2] as f64 / total as f64 * 100.0, dim_correct[2], total);
-    println!("    J/P: {:.2}% ({}/{})", dim_correct[3] as f64 / total as f64 * 100.0, dim_correct[3], total);
+    println!(
+        "    E/I: {:.2}% ({}/{})",
+        dim_correct[0] as f64 / total as f64 * 100.0,
+        dim_correct[0],
+        total
+    );
+    println!(
+        "    S/N: {:.2}% ({}/{})",
+        dim_correct[1] as f64 / total as f64 * 100.0,
+        dim_correct[1],
+        total
+    );
+    println!(
+        "    T/F: {:.2}% ({}/{})",
+        dim_correct[2] as f64 / total as f64 * 100.0,
+        dim_correct[2],
+        total
+    );
+    println!(
+        "    J/P: {:.2}% ({}/{})",
+        dim_correct[3] as f64 / total as f64 * 100.0,
+        dim_correct[3],
+        total
+    );
 
     println!("\n═══════════════════════════════════════════════════════════\n");
     println!("Analysis:\n");
-    
+
     let vs_random = test_acc / 0.0625;
     let vs_baseline = test_acc / 0.2173;
-    
+
     println!("  vs Random (6.25%):   {:.2}x better", vs_random);
     println!("  vs Baseline (21.73%): {:.2}x\n", vs_baseline);
-    
+
     if test_acc > 0.25 {
         println!("✅ Psychological features ALONE beat baseline!");
         println!("   → They contain useful MBTI signals");
@@ -283,7 +311,7 @@ pub fn test_psychological_features_only(feature_type: &str) -> Result<(), Box<dy
     }
 
     println!("\n═══════════════════════════════════════════════════════════\n");
-    
+
     Ok(())
 }
 
@@ -298,10 +326,13 @@ pub fn test_normalization_methods() -> Result<(), Box<dyn Error>> {
     let file = File::open(&config.data.csv_path)?;
     let mut rdr = ReaderBuilder::new().has_headers(true).from_reader(file);
     let records: Vec<MbtiRecord> = rdr.deserialize().take(100).collect::<Result<_, _>>()?;
-    
+
     let texts: Vec<String> = records.iter().map(|r| r.posts.clone()).collect();
-    
-    println!("Extracting psychological features from {} samples...", texts.len());
+
+    println!(
+        "Extracting psychological features from {} samples...",
+        texts.len()
+    );
     let extractor = PsychologicalFeatureExtractor::new();
     let features: Vec<Vec<f64>> = texts
         .iter()
@@ -313,8 +344,10 @@ pub fn test_normalization_methods() -> Result<(), Box<dyn Error>> {
         let max_val = first.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
         let min_val = first.iter().fold(f64::INFINITY, |a, &b| a.min(b));
         let mean_val: f64 = first.iter().sum::<f64>() / first.len() as f64;
-        let std_val: f64 = (first.iter().map(|&x| (x - mean_val).powi(2)).sum::<f64>() / first.len() as f64).sqrt();
-        
+        let std_val: f64 = (first.iter().map(|&x| (x - mean_val).powi(2)).sum::<f64>()
+            / first.len() as f64)
+            .sqrt();
+
         println!("  Range: [{:.4}, {:.4}]", min_val, max_val);
         println!("  Mean:  {:.4}", mean_val);
         println!("  Std:   {:.4}", std_val);
@@ -326,10 +359,10 @@ pub fn test_normalization_methods() -> Result<(), Box<dyn Error>> {
         let max_norm = normalized.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
         let min_norm = normalized.iter().fold(f64::INFINITY, |a, &b| a.min(b));
         let mean_norm: f64 = normalized.iter().sum::<f64>() / normalized.len() as f64;
-        
+
         println!("  Range: [{:.4}, {:.4}]", min_norm, max_norm);
         println!("  Mean:  {:.4}", mean_norm);
-        
+
         // Method 2: Min-Max to [0, 1]
         println!("\nMethod 2: Min-Max [0, 1]");
         let min_max_normalized: Vec<f64> = first
@@ -342,11 +375,15 @@ pub fn test_normalization_methods() -> Result<(), Box<dyn Error>> {
                 }
             })
             .collect();
-        let mm_max = min_max_normalized.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-        let mm_min = min_max_normalized.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        
+        let mm_max = min_max_normalized
+            .iter()
+            .fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let mm_min = min_max_normalized
+            .iter()
+            .fold(f64::INFINITY, |a, &b| a.min(b));
+
         println!("  Range: [{:.4}, {:.4}]", mm_min, mm_max);
-        
+
         // Method 3: Robust scaling (clip outliers)
         println!("\nMethod 3: Robust Scaling (clip to [-3σ, +3σ])");
         let robust_normalized: Vec<f64> = first
@@ -357,12 +394,16 @@ pub fn test_normalization_methods() -> Result<(), Box<dyn Error>> {
                 } else {
                     0.0
                 };
-                z.max(-3.0).min(3.0) / 3.0 // Clip and scale to [-1, 1]
+                z.clamp(-3.0, 3.0) / 3.0 // Clip and scale to [-1, 1]
             })
             .collect();
-        let rb_max = robust_normalized.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-        let rb_min = robust_normalized.iter().fold(f64::INFINITY, |a, &b| a.min(b));
-        
+        let rb_max = robust_normalized
+            .iter()
+            .fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let rb_min = robust_normalized
+            .iter()
+            .fold(f64::INFINITY, |a, &b| a.min(b));
+
         println!("  Range: [{:.4}, {:.4}]", rb_min, rb_max);
     }
 
@@ -371,7 +412,6 @@ pub fn test_normalization_methods() -> Result<(), Box<dyn Error>> {
     println!("  • Z-score: Good for normal distributions");
     println!("  • Min-Max: Good for bounded features");
     println!("  • Robust: Good when outliers are present (max=3795!)\n");
-    
+
     Ok(())
 }
-

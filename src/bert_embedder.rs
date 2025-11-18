@@ -32,4 +32,3 @@ impl BertEmbedder {
         self.encoder.embedding_dim()
     }
 }
-

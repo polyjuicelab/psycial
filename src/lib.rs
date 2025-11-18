@@ -39,7 +39,7 @@
 //!     println!("Confidence: {:.1}%", result.confidence * 100.0);
 //!     
 //!     // Access individual dimensions
-//!     println!("E/I: {} ({:.1}%)", 
+//!     println!("E/I: {} ({:.1}%)",
 //!              result.dimensions.e_i.letter,
 //!              result.dimensions.e_i.confidence * 100.0);
 //!     
@@ -251,8 +251,8 @@ pub mod model_loader;
 
 // Core modules
 pub mod baseline;
-pub mod bert_mlp;
 pub mod bert_embedder;
+pub mod bert_mlp;
 pub mod bert_only;
 pub mod hybrid;
 pub mod neural_net;
@@ -267,9 +267,9 @@ pub mod psyattention_full;
 pub use hybrid::tfidf::TfidfVectorizer;
 
 // Test/experimental modules
-pub mod test_psy_features;
-pub mod test_orthogonality;
 pub mod test_confidence_ensemble;
+pub mod test_orthogonality;
+pub mod test_psy_features;
 
 // Re-export commonly used types for convenience
 use csv::ReaderBuilder;
@@ -283,7 +283,7 @@ pub struct MbtiRecord {
     /// MBTI personality type (e.g., "INTJ", "ENFP")
     #[serde(rename = "type")]
     pub mbti_type: String,
-    
+
     /// User's posts/text content
     pub posts: String,
 }
